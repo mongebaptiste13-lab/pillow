@@ -392,10 +392,11 @@ export default function Dashboard({
                   <div className="min-w-0">
                     <p className="text-sm font-medium">Notifications</p>
                     <p className="text-xs text-muted-foreground truncate">
-                      {pushStatus === "subscribed" ? "✅ Activées (background)" :
-                       pushStatus === "loading"    ? "Activation…" :
-                       pushStatus === "denied"     ? "Bloquées — autoriser dans les réglages" :
-                       pushStatus === "unsupported"? "Non supportées sur cet appareil" :
+                      {pushStatus === "subscribed"  ? "✅ Activées (background)" :
+                       pushStatus === "loading"     ? "Activation en cours…" :
+                       pushStatus === "denied"      ? "🚫 Bloquées — autoriser dans les réglages" :
+                       pushStatus === "unsupported" ? "⚠️ Installe l'app sur l'écran d'accueil" :
+                       pushStatus === "error"       ? "❌ Erreur — réessaie" :
                        "Désactivées"}
                     </p>
                   </div>
@@ -405,7 +406,6 @@ export default function Dashboard({
                   disabled={pushStatus === "loading" || pushStatus === "denied" || pushStatus === "unsupported"}
                   onCheckedChange={async (checked) => {
                     if (checked) {
-                      await requestPermission()
                       await subscribe()
                     } else {
                       await unsubscribe()
