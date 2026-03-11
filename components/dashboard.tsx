@@ -171,19 +171,23 @@ export default function Dashboard({
     return () => clearInterval(id)
   }, [profile?.pill_time])
 
-  // Schedule local notifications
+  // Schedule local notifications (safe: may not work on iOS without PWA)
   useEffect(() => {
     if (!profile) return
-    cleanupRef.current()
-    const fn = scheduleDailyNotifications({
-      pillTime: profile.pill_time,
-      pillType: findPill(profile.pill_name)?.pillType ?? "21_7",
-      pillLogs: pillLogs.filter((l) => l.taken).map((l) => l.date),
-      daysRemaining: profile.days_remaining ?? 0,
-      stockAlertDays: profile.stock_alert_days ?? 7,
-    })
-    cleanupRef.current = fn
-    return () => fn()
+    try {
+      cleanupRef.current()
+      const fn = scheduleDailyNotifications({
+        pillTime: profile.pill_time,
+        pillType: findPill(profile.pill_name)?.pillType ?? "21_7",
+        pillLogs: pillLogs.filter((l) => l.taken).map((l) => l.date),
+        daysRemaining: profile.days_remaining ?? 0,
+        stockAlertDays: profile.stock_alert_days ?? 7,
+      })
+      cleanupRef.current = fn
+      return () => fn()
+    } catch {
+      // Notification API not available (e.g. iOS Safari without PWA)
+    }
   }, [profile, pillLogs])
 
   async function handleTaken() {
@@ -240,7 +244,7 @@ export default function Dashboard({
       body: JSON.stringify({ type: "snooze", title: "Pillow 💊", body: "C'est l'heure de ta pilule !", scheduledAt }),
     }).catch(() => {
       setTimeout(() => {
-        if (Notification.permission === "granted") {
+        if (typeof window !== "undefined" && "Notification" in window && Notification.permission === "granted") {
           new Notification("Pillow 💊", { body: "C'est l'heure de ta pilule !", icon: "/pillow-logo.png" })
         }
       }, ms)

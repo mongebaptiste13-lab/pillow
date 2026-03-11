@@ -54,9 +54,13 @@ export const getSnoozeFeedbackMessage = () => pickRandom(SNOOZE_MESSAGES)
 export const getStockNotificationMessage = (n: number) => pickRandom(STOCK_MESSAGES)(n)
 export const getRestartNotificationMessage = () => pickRandom(RESTART_MESSAGES)
 
+// Safe check: Notification API is undefined on older iOS Safari
+const hasNotification = () =>
+  typeof window !== "undefined" && "Notification" in window
+
 export function fireNotification(title: string, body: string) {
-  if (typeof window === "undefined") return
-  if ("Notification" in window && Notification.permission === "granted") {
+  if (!hasNotification()) return
+  if (Notification.permission === "granted") {
     new Notification(title, { body, icon: ICON })
   }
 }
@@ -68,7 +72,7 @@ export function scheduleNotification(delayMs: number, title: string, body: strin
 }
 
 export async function requestPermission(): Promise<NotificationPermission> {
-  if (typeof window === "undefined" || !("Notification" in window)) return "denied"
+  if (!hasNotification()) return "denied"
   if (Notification.permission !== "default") return Notification.permission
   return Notification.requestPermission()
 }
@@ -85,7 +89,7 @@ export function scheduleDailyNotifications({
   stockAlertDays: number
   force?: boolean
 }): () => void {
-  if (typeof window === "undefined" || Notification.permission !== "granted") return () => {}
+  if (!hasNotification() || Notification.permission !== "granted") return () => {}
   const today = new Date().toISOString().split("T")[0]
   if (!force && window.localStorage.getItem(SCHED_KEY) === today) return () => {}
   window.localStorage.setItem(SCHED_KEY, today)
