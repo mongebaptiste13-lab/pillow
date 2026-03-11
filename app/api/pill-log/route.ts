@@ -1,10 +1,9 @@
 import { NextResponse } from "next/server"
-import { createServerSupabaseClient } from "@/lib/supabase-server"
+import { getServerContext } from "@/lib/supabase-server"
 import { getFollowUpNotificationMessage } from "@/lib/notifications"
 
 export async function POST(req: Request) {
-  const supabase = createServerSupabaseClient(req)
-  const { data: { user } } = await supabase.auth.getUser()
+  const { user, supabase } = await getServerContext(req)
   if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
 
   const { date, taken } = await req.json()
@@ -33,17 +32,16 @@ export async function POST(req: Request) {
 }
 
 export async function GET(req: Request) {
-  const supabase = createServerSupabaseClient(req)
-  const { data: { user } } = await supabase.auth.getUser()
+  const { user, supabase } = await getServerContext(req)
   if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
 
   const url = new URL(req.url)
   const from = url.searchParams.get("from")
-  const to = url.searchParams.get("to")
+  const to   = url.searchParams.get("to")
 
   let query = supabase.from("pill_logs").select("date, taken").eq("user_id", user.id).order("date", { ascending: false })
   if (from) query = query.gte("date", from)
-  if (to) query = query.lte("date", to)
+  if (to)   query = query.lte("date", to)
 
   const { data, error } = await query
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })

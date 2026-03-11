@@ -1,9 +1,8 @@
 import { NextResponse } from "next/server"
-import { createServerSupabaseClient } from "@/lib/supabase-server"
+import { getServerContext } from "@/lib/supabase-server"
 
 export async function POST(req: Request) {
-  const supabase = createServerSupabaseClient(req)
-  const { data: { user } } = await supabase.auth.getUser()
+  const { user, supabase } = await getServerContext(req)
   if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
 
   const { type, title, body, scheduledAt } = await req.json()
@@ -26,8 +25,7 @@ export async function POST(req: Request) {
 }
 
 export async function DELETE(req: Request) {
-  const supabase = createServerSupabaseClient(req)
-  const { data: { user } } = await supabase.auth.getUser()
+  const { user, supabase } = await getServerContext(req)
   if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
 
   const { type } = await req.json()
