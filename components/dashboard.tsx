@@ -1,9 +1,14 @@
 "use client"
 
-import { useState, useEffect, useCallback, useRef } from "react"
+import { useState, useEffect, useCallback, useRef, useMemo } from "react"
 import { createClient } from "@/lib/supabase-client"
 import { usePushNotifications } from "@/hooks/use-push-notifications"
-import { scheduleDailyNotifications, getTakenFeedbackMessage, getSnoozeFeedbackMessage, requestPermission } from "@/lib/notifications"
+import {
+  scheduleDailyNotifications,
+  getTakenFeedbackMessage,
+  getSnoozeFeedbackMessage,
+  requestPermission,
+} from "@/lib/notifications"
 import { findPill } from "@/lib/pill-data"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent } from "@/components/ui/card"
@@ -11,7 +16,9 @@ import { Badge } from "@/components/ui/badge"
 import { Switch } from "@/components/ui/switch"
 import { Label } from "@/components/ui/label"
 import { Input } from "@/components/ui/input"
-import { LogOut, Bell, BellOff, Loader2, Check, Clock, User, Calendar } from "lucide-react"
+import {
+  LogOut, Bell, BellOff, Loader2, Check, Clock, User, Calendar, Settings,
+} from "lucide-react"
 
 interface Profile {
   id: string
@@ -34,7 +41,13 @@ const SNOOZE_OPTIONS = [
 
 type Tab = "pill" | "cycle" | "account"
 
-export default function Dashboard({ userId }: { userId: string }) {
+export default function Dashboard({
+  userId,
+  onNeedsOnboarding,
+}: {
+  userId: string
+  onNeedsOnboarding?: () => void
+}) {
   const [tab, setTab] = useState<Tab>("pill")
   const [profile, setProfile] = useState<Profile | null>(null)
   const [pillLogs, setPillLogs] = useState<PillLog[]>([])
@@ -47,24 +60,41 @@ export default function Dashboard({ userId }: { userId: string }) {
   const [saving, setSaving] = useState(false)
   const cleanupRef = useRef<() => void>(() => {})
 
-  const supabase = createClient()
+  // Single stable supabase instance
+  const supabase = useMemo(() => createClient(), [])
   const { status: pushStatus, subscribe, unsubscribe } = usePushNotifications()
 
-  const today = new Date().toISOString().split("T")[0]
+  const today = useMemo(() => new Date().toISOString().split("T")[0], [])
 
   const loadData = useCallback(async () => {
     setLoading(true)
-    const [{ data: prof }, { data: logs }] = await Promise.all([
-      supabase.from("profiles").select("*").eq("id", userId).single(),
-      supabase.from("pill_logs").select("date, taken").eq("user_id", userId).order("date", { ascending: false }).limit(90),
-    ])
-    if (prof) { setProfile(prof); setEditProfile(prof) }
-    if (logs) {
-      setPillLogs(logs)
-      setTakenToday(logs.some((l: PillLog) => l.date === today && l.taken))
+    try {
+      const [profResult, logsResult] = await Promise.all([
+        supabase.from("profiles").select("*").eq("id", userId).single(),
+        supabase
+          .from("pill_logs")
+          .select("date, taken")
+          .eq("user_id", userId)
+          .order("date", { ascending: false })
+          .limit(90),
+      ])
+
+      if (profResult.data) {
+        setProfile(profResult.data)
+        setEditProfile(profResult.data)
+      } else {
+        // No profile — trigger onboarding
+        onNeedsOnboarding?.()
+      }
+
+      if (logsResult.data) {
+        setPillLogs(logsResult.data)
+        setTakenToday(logsResult.data.some((l: PillLog) => l.date === today && l.taken))
+      }
+    } finally {
+      setLoading(false)
     }
-    setLoading(false)
-  }, [userId, today, supabase])
+  }, [supabase, userId, today, onNeedsOnboarding])
 
   useEffect(() => { loadData() }, [loadData])
 
@@ -95,8 +125,8 @@ export default function Dashboard({ userId }: { userId: string }) {
       pillTime: profile.pill_time,
       pillType: findPill(profile.pill_name)?.pillType ?? "21_7",
       pillLogs: pillLogs.filter((l) => l.taken).map((l) => l.date),
-      daysRemaining: profile.days_remaining,
-      stockAlertDays: profile.stock_alert_days,
+      daysRemaining: profile.days_remaining ?? 0,
+      stockAlertDays: profile.stock_alert_days ?? 7,
     })
     cleanupRef.current = fn
     return () => fn()
@@ -106,54 +136,85 @@ export default function Dashboard({ userId }: { userId: string }) {
     setTakenToday(true)
     setShowSnooze(false)
     setConfirmMsg(getTakenFeedbackMessage())
+
+    // Log via API
     await fetch("/api/pill-log", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ date: today, taken: true }),
     })
-    if (profile) {
-      await supabase.from("profiles").update({ days_remaining: Math.max(0, profile.days_remaining - 1) }).eq("id", userId)
+
+    // Decrement stock
+    if (profile && profile.days_remaining > 0) {
+      const newDays = profile.days_remaining - 1
+      await supabase
+        .from("profiles")
+        .update({ days_remaining: newDays })
+        .eq("id", userId)
+      setProfile((p) => p ? { ...p, days_remaining: newDays } : p)
     }
-    loadData()
+
+    // Refresh logs
+    const { data: logs } = await supabase
+      .from("pill_logs")
+      .select("date, taken")
+      .eq("user_id", userId)
+      .order("date", { ascending: false })
+      .limit(90)
+    if (logs) setPillLogs(logs)
   }
 
   async function handleSnooze(ms: number) {
     setShowSnooze(false)
     setConfirmMsg(getSnoozeFeedbackMessage())
     const scheduledAt = new Date(Date.now() + ms).toISOString()
-    await fetch("/api/push/schedule", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ type: "snooze", title: "Pillow 💊", body: "C'est l'heure de ta pilule !", scheduledAt }),
-    }).catch(() => {
+    try {
+      await fetch("/api/push/schedule", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          type: "snooze",
+          title: "Pillow 💊",
+          body: "C'est l'heure de ta pilule !",
+          scheduledAt,
+        }),
+      })
+    } catch {
       // Local fallback
       setTimeout(() => {
-        if (Notification.permission === "granted") new Notification("Pillow 💊", { body: "C'est l'heure de ta pilule !", icon: "/pillow-logo.png" })
+        if (Notification.permission === "granted") {
+          new Notification("Pillow 💊", {
+            body: "C'est l'heure de ta pilule !",
+            icon: "/pillow-logo.png",
+          })
+        }
       }, ms)
-    })
+    }
   }
 
   async function saveProfile() {
     setSaving(true)
-    await supabase.from("profiles").update(editProfile).eq("id", userId)
+    const { data } = await supabase
+      .from("profiles")
+      .update(editProfile)
+      .eq("id", userId)
+      .select("*")
+      .single()
+    if (data) setProfile(data)
     setSaving(false)
-    loadData()
   }
 
   // Calendar helpers
-  function getCalendarDays() {
-    const now = new Date()
-    const year = now.getFullYear()
-    const month = now.getMonth()
-    const daysInMonth = new Date(year, month + 1, 0).getDate()
-    const firstDay = new Date(year, month, 1).getDay()
-    return { year, month, daysInMonth, firstDay: (firstDay + 6) % 7 }
-  }
+  const now = new Date()
+  const year = now.getFullYear()
+  const month = now.getMonth()
+  const daysInMonth = new Date(year, month + 1, 0).getDate()
+  const rawFirstDay = new Date(year, month, 1).getDay()
+  const firstDay = (rawFirstDay + 6) % 7 // Monday = 0
 
-  const { year, month, daysInMonth, firstDay } = getCalendarDays()
-  const MONTHS = ["Jan", "Fév", "Mar", "Avr", "Mai", "Jun", "Jul", "Aoû", "Sep", "Oct", "Nov", "Déc"]
+  const MONTHS = ["Janvier", "Février", "Mars", "Avril", "Mai", "Juin", "Juillet", "Août", "Septembre", "Octobre", "Novembre", "Décembre"]
 
-  function dayStatus(day: number) {
+  function dayStatus(day: number): "taken" | "missed" | "none" {
     const d = `${year}-${String(month + 1).padStart(2, "0")}-${String(day).padStart(2, "0")}`
     const log = pillLogs.find((l) => l.date === d)
     if (!log) return "none"
@@ -165,31 +226,35 @@ export default function Dashboard({ userId }: { userId: string }) {
   const totalTracked = pillLogs.length
   const adherenceRate = totalTracked > 0 ? Math.round((takeDays / totalTracked) * 100) : 0
 
+  const [pillH, pillM] = (profile?.pill_time ?? "08:00").split(":").map(Number)
+  const pillAt = new Date(now.getFullYear(), now.getMonth(), now.getDate(), pillH ?? 8, pillM ?? 0)
+  const canTake = now.getTime() >= pillAt.getTime() - 30 * 60_000
+
   if (loading) {
     return (
-      <div className="min-h-screen flex items-center justify-center">
-        <Loader2 className="h-8 w-8 animate-spin text-primary" />
+      <div className="min-h-screen flex items-center justify-center bg-background">
+        <div className="text-center space-y-3">
+          <Loader2 className="h-8 w-8 animate-spin text-primary mx-auto" />
+          <p className="text-sm text-muted-foreground">Chargement de ton profil…</p>
+        </div>
       </div>
     )
   }
 
-  const [pillH, pillM] = (profile?.pill_time ?? "08:00").split(":").map(Number)
-  const now = new Date()
-  const pillAt = new Date(now.getFullYear(), now.getMonth(), now.getDate(), pillH, pillM)
-  const canTake = (now.getTime() >= pillAt.getTime() - 30 * 60_000)
-
   return (
     <div className="min-h-screen bg-background flex flex-col max-w-md mx-auto">
       {/* Header */}
-      <header className="px-4 pt-safe pt-4 pb-3 flex items-center justify-between">
+      <header className="px-4 pt-4 pb-3 flex items-center justify-between border-b bg-background/95 sticky top-0 z-10 backdrop-blur">
         <div className="flex items-center gap-2">
-          <div className="w-8 h-8 rounded-xl overflow-hidden bg-primary/10">
+          <div className="w-8 h-8 rounded-xl overflow-hidden bg-primary/10 flex items-center justify-center">
             {/* eslint-disable-next-line @next/next/no-img-element */}
             <img src="/pillow-logo.png" alt="Pillow" className="w-full h-full object-cover scale-[1.7]" />
           </div>
           <span className="font-bold text-primary text-lg">Pillow</span>
         </div>
-        {profile && <span className="text-sm text-muted-foreground">Bonjour {profile.name} 👋</span>}
+        {profile?.name && (
+          <span className="text-sm text-muted-foreground">Bonjour {profile.name} 👋</span>
+        )}
       </header>
 
       {/* Content */}
@@ -201,24 +266,24 @@ export default function Dashboard({ userId }: { userId: string }) {
             {/* Big pill card */}
             <Card className="overflow-hidden border-0 bg-gradient-to-br from-primary/20 via-primary/10 to-background shadow-md">
               <CardContent className="pt-8 pb-6 text-center space-y-4">
-                <div className="text-6xl mb-2">💊</div>
+                <div className="text-6xl">💊</div>
                 <div>
                   <h2 className="text-2xl font-bold">
                     {takenToday ? "Pilule prise ✅" : "As-tu pris ta pilule ?"}
                   </h2>
-                  {profile && (
+                  {profile ? (
                     <p className="text-muted-foreground text-sm mt-1">
                       {profile.pill_name} · {profile.pill_time}
                     </p>
+                  ) : (
+                    <p className="text-muted-foreground text-sm mt-1">Configure ton profil ci-dessous</p>
                   )}
                 </div>
 
-                {/* Confirmation message */}
                 {confirmMsg && (
                   <p className="text-sm bg-primary/10 text-primary rounded-xl px-4 py-3 italic">{confirmMsg}</p>
                 )}
 
-                {/* Countdown before pill time */}
                 {!takenToday && !canTake && countdown && (
                   <div className="text-center">
                     <span className="text-xs text-muted-foreground">Prochaine prise dans</span>
@@ -226,9 +291,8 @@ export default function Dashboard({ userId }: { userId: string }) {
                   </div>
                 )}
 
-                {/* Action buttons */}
                 {!takenToday && canTake && !showSnooze && (
-                  <div className="flex gap-3 justify-center">
+                  <div className="flex gap-3 justify-center flex-wrap">
                     <Button onClick={handleTaken} size="lg" className="gap-2 px-6">
                       <Check className="h-5 w-5" /> Oui, prise !
                     </Button>
@@ -238,7 +302,6 @@ export default function Dashboard({ userId }: { userId: string }) {
                   </div>
                 )}
 
-                {/* Snooze options */}
                 {showSnooze && (
                   <div className="space-y-2">
                     <p className="text-sm text-muted-foreground">Me rappeler dans…</p>
@@ -260,23 +323,21 @@ export default function Dashboard({ userId }: { userId: string }) {
             {/* Stock card */}
             {profile && (
               <Card>
-                <CardContent className="pt-4 pb-4 flex items-center justify-between">
-                  <div>
-                    <p className="text-xs text-muted-foreground">Stock restant</p>
-                    <p className="text-xl font-bold">
-                      {profile.days_remaining} <span className="text-sm font-normal text-muted-foreground">jours</span>
-                    </p>
-                  </div>
-                  <div className="text-right">
-                    <p className="text-xs text-muted-foreground">Type</p>
+                <CardContent className="pt-4 pb-4">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <p className="text-xs text-muted-foreground">Stock restant</p>
+                      <p className="text-xl font-bold">
+                        {profile.days_remaining ?? 0}{" "}
+                        <span className="text-sm font-normal text-muted-foreground">jours</span>
+                      </p>
+                    </div>
                     <Badge variant="secondary" className="text-xs">
                       {pillType === "28_continu" ? "Continu" : "21j + 7j"}
                     </Badge>
                   </div>
-                  {profile.days_remaining <= profile.stock_alert_days && (
-                    <Badge variant="destructive" className="absolute top-2 right-2 text-xs">
-                      Penser à racheter !
-                    </Badge>
+                  {(profile.days_remaining ?? 0) <= (profile.stock_alert_days ?? 7) && (
+                    <p className="text-xs text-destructive mt-2 font-medium">⚠️ Pense à racheter ta pilule !</p>
                   )}
                 </CardContent>
               </Card>
@@ -284,32 +345,26 @@ export default function Dashboard({ userId }: { userId: string }) {
 
             {/* Push notifications toggle */}
             <Card>
-              <CardContent className="pt-4 pb-4 flex items-center justify-between">
+              <CardContent className="pt-4 pb-4 flex items-center justify-between gap-3">
                 <div className="flex items-center gap-2">
-                  {pushStatus === "subscribed" ? <Bell className="h-4 w-4 text-primary" /> : <BellOff className="h-4 w-4 text-muted-foreground" />}
+                  {pushStatus === "subscribed"
+                    ? <Bell className="h-4 w-4 text-primary shrink-0" />
+                    : <BellOff className="h-4 w-4 text-muted-foreground shrink-0" />}
                   <div>
                     <p className="text-sm font-medium">Notifications</p>
                     <p className="text-xs text-muted-foreground">
-                      {pushStatus === "subscribed"
-                        ? "Activées (même quand l'app est fermée)"
-                        : pushStatus === "denied"
-                        ? "Bloquées par le navigateur"
-                        : pushStatus === "unsupported"
-                        ? "Non supportées sur cet appareil"
-                        : "Désactivées"}
+                      {pushStatus === "subscribed" ? "Activées (background)" :
+                       pushStatus === "denied" ? "Bloquées par le navigateur" :
+                       pushStatus === "unsupported" ? "Non supportées" : "Désactivées"}
                     </p>
                   </div>
                 </div>
                 <Switch
                   checked={pushStatus === "subscribed"}
-                  disabled={pushStatus === "loading" || pushStatus === "denied" || pushStatus === "unsupported"}
+                  disabled={["loading", "denied", "unsupported"].includes(pushStatus)}
                   onCheckedChange={async (checked) => {
-                    if (checked) {
-                      await requestPermission()
-                      await subscribe()
-                    } else {
-                      await unsubscribe()
-                    }
+                    if (checked) { await requestPermission(); await subscribe() }
+                    else await unsubscribe()
                   }}
                 />
               </CardContent>
@@ -322,29 +377,31 @@ export default function Dashboard({ userId }: { userId: string }) {
           <div className="space-y-4 py-4">
             <h2 className="text-lg font-bold">Suivi du cycle</h2>
 
-            {/* Adherence ratio */}
             <Card>
-              <CardContent className="pt-4 pb-4 flex items-center justify-between">
-                <div>
-                  <p className="text-xs text-muted-foreground">Observance (90 derniers jours)</p>
-                  <p className="text-3xl font-bold text-primary">{adherenceRate}%</p>
-                </div>
-                <div className="text-right text-xs text-muted-foreground">
-                  <p>{takeDays} prise{takeDays > 1 ? "s" : ""}</p>
-                  <p>{totalTracked - takeDays} manquée{(totalTracked - takeDays) > 1 ? "s" : ""}</p>
+              <CardContent className="pt-4 pb-4">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="text-xs text-muted-foreground">Observance (90 derniers jours)</p>
+                    <p className="text-3xl font-bold text-primary">
+                      {adherenceRate}<span className="text-lg">%</span>
+                    </p>
+                  </div>
+                  <div className="text-right text-sm text-muted-foreground space-y-0.5">
+                    <p>✅ {takeDays} prise{takeDays > 1 ? "s" : ""}</p>
+                    <p>❌ {totalTracked - takeDays} manquée{(totalTracked - takeDays) > 1 ? "s" : ""}</p>
+                  </div>
                 </div>
               </CardContent>
             </Card>
 
-            {/* Calendar */}
             <Card>
               <CardContent className="pt-4 pb-4">
-                <p className="text-sm font-semibold mb-3 text-center capitalize">
+                <p className="text-sm font-semibold mb-3 text-center">
                   {MONTHS[month]} {year}
                 </p>
-                <div className="grid grid-cols-7 gap-1 text-xs">
+                <div className="grid grid-cols-7 gap-1">
                   {["L", "M", "M", "J", "V", "S", "D"].map((d, i) => (
-                    <div key={i} className="text-center font-semibold text-muted-foreground py-1">{d}</div>
+                    <div key={i} className="text-center text-xs font-semibold text-muted-foreground py-1">{d}</div>
                   ))}
                   {Array.from({ length: firstDay }).map((_, i) => <div key={`e${i}`} />)}
                   {Array.from({ length: daysInMonth }).map((_, i) => {
@@ -354,12 +411,13 @@ export default function Dashboard({ userId }: { userId: string }) {
                     return (
                       <div
                         key={day}
-                        className={`aspect-square rounded-full flex items-center justify-center text-xs font-medium transition-colors
-                          ${status === "taken" ? "bg-primary text-white" : ""}
-                          ${status === "missed" ? "bg-destructive/20 text-destructive" : ""}
-                          ${status === "none" ? "text-foreground/60" : ""}
-                          ${isToday ? "ring-2 ring-primary ring-offset-1" : ""}
-                        `}
+                        className={[
+                          "aspect-square rounded-full flex items-center justify-center text-xs font-medium transition-all",
+                          status === "taken"  ? "bg-primary text-white shadow-sm" : "",
+                          status === "missed" ? "bg-destructive/20 text-destructive" : "",
+                          status === "none"   ? "text-foreground/50" : "",
+                          isToday            ? "ring-2 ring-primary ring-offset-1" : "",
+                        ].join(" ")}
                       >
                         {day}
                       </div>
@@ -367,8 +425,12 @@ export default function Dashboard({ userId }: { userId: string }) {
                   })}
                 </div>
                 <div className="flex gap-4 justify-center mt-3 text-xs text-muted-foreground">
-                  <span className="flex items-center gap-1"><span className="w-3 h-3 rounded-full bg-primary inline-block" /> Prise</span>
-                  <span className="flex items-center gap-1"><span className="w-3 h-3 rounded-full bg-destructive/30 inline-block" /> Manquée</span>
+                  <span className="flex items-center gap-1.5">
+                    <span className="w-3 h-3 rounded-full bg-primary inline-block" /> Prise
+                  </span>
+                  <span className="flex items-center gap-1.5">
+                    <span className="w-3 h-3 rounded-full bg-destructive/40 inline-block" /> Manquée
+                  </span>
                 </div>
               </CardContent>
             </Card>
@@ -378,7 +440,10 @@ export default function Dashboard({ userId }: { userId: string }) {
         {/* ─── TAB ACCOUNT ─── */}
         {tab === "account" && (
           <div className="space-y-4 py-4">
-            <h2 className="text-lg font-bold">Mon compte</h2>
+            <h2 className="text-lg font-bold flex items-center gap-2">
+              <Settings className="h-5 w-5" /> Mon compte
+            </h2>
+
             <Card>
               <CardContent className="pt-4 pb-4 space-y-4">
                 <div className="space-y-1.5">
@@ -386,6 +451,15 @@ export default function Dashboard({ userId }: { userId: string }) {
                   <Input
                     value={editProfile.name ?? ""}
                     onChange={(e) => setEditProfile((p) => ({ ...p, name: e.target.value }))}
+                    placeholder="Ton prénom"
+                  />
+                </div>
+                <div className="space-y-1.5">
+                  <Label>Pilule</Label>
+                  <Input
+                    value={editProfile.pill_name ?? ""}
+                    onChange={(e) => setEditProfile((p) => ({ ...p, pill_name: e.target.value }))}
+                    placeholder="Nom de ta pilule"
                   />
                 </div>
                 <div className="space-y-1.5">
@@ -397,12 +471,14 @@ export default function Dashboard({ userId }: { userId: string }) {
                   />
                 </div>
                 <div className="space-y-1.5">
-                  <Label>Jours restants</Label>
+                  <Label>Jours de pilule restants</Label>
                   <Input
                     type="number"
                     min={0}
                     value={editProfile.days_remaining ?? 0}
-                    onChange={(e) => setEditProfile((p) => ({ ...p, days_remaining: parseInt(e.target.value) || 0 }))}
+                    onChange={(e) =>
+                      setEditProfile((p) => ({ ...p, days_remaining: parseInt(e.target.value) || 0 }))
+                    }
                   />
                 </div>
                 <div className="space-y-1.5">
@@ -412,20 +488,26 @@ export default function Dashboard({ userId }: { userId: string }) {
                     min={1}
                     max={30}
                     value={editProfile.stock_alert_days ?? 7}
-                    onChange={(e) => setEditProfile((p) => ({ ...p, stock_alert_days: parseInt(e.target.value) || 7 }))}
+                    onChange={(e) =>
+                      setEditProfile((p) => ({ ...p, stock_alert_days: parseInt(e.target.value) || 7 }))
+                    }
                   />
                 </div>
                 <Button onClick={saveProfile} disabled={saving} className="w-full">
-                  {saving ? "Sauvegarde…" : "Enregistrer"}
+                  {saving ? "Sauvegarde…" : "Enregistrer les modifications"}
                 </Button>
               </CardContent>
             </Card>
+
             <Card>
               <CardContent className="pt-4 pb-4">
                 <Button
                   variant="outline"
-                  className="w-full text-destructive hover:text-destructive"
-                  onClick={async () => { await createClient().auth.signOut(); window.location.reload() }}
+                  className="w-full text-destructive hover:text-destructive border-destructive/30"
+                  onClick={async () => {
+                    await supabase.auth.signOut()
+                    window.location.reload()
+                  }}
                 >
                   <LogOut className="mr-2 h-4 w-4" /> Se déconnecter
                 </Button>
@@ -436,27 +518,46 @@ export default function Dashboard({ userId }: { userId: string }) {
       </main>
 
       {/* Bottom nav */}
-      <nav className="fixed bottom-0 left-0 right-0 bg-background/95 backdrop-blur border-t pb-safe">
-        <div className="max-w-md mx-auto flex">
+      <nav className="fixed bottom-0 left-0 right-0 bg-background/95 backdrop-blur border-t">
+        <div className="max-w-md mx-auto flex h-16 items-end pb-2">
           <button
             onClick={() => setTab("cycle")}
-            className={`flex-1 flex flex-col items-center gap-0.5 py-3 text-xs transition-colors ${tab === "cycle" ? "text-primary" : "text-muted-foreground"}`}
+            className={`flex-1 flex flex-col items-center gap-0.5 py-2 text-xs transition-colors ${
+              tab === "cycle" ? "text-primary" : "text-muted-foreground"
+            }`}
           >
             <Calendar className="h-5 w-5" />
             Cycle
           </button>
-          <button
-            onClick={() => setTab("pill")}
-            className={`flex-[2] flex flex-col items-center gap-0.5 py-3 text-sm font-semibold transition-colors relative ${tab === "pill" ? "text-primary" : "text-muted-foreground"}`}
-          >
-            <div className={`absolute -top-5 w-14 h-14 rounded-full flex items-center justify-center shadow-lg transition-all ${tab === "pill" ? "bg-primary scale-110" : "bg-primary/70"}`}>
-              <span className="text-2xl">💊</span>
-            </div>
-            <span className="mt-7">Pilule</span>
-          </button>
+
+          {/* Central pill button */}
+          <div className="flex-[2] flex flex-col items-center relative">
+            <button
+              onClick={() => setTab("pill")}
+              className="absolute -top-6 flex flex-col items-center gap-0"
+            >
+              <div
+                className={`w-14 h-14 rounded-full flex items-center justify-center shadow-lg transition-all ${
+                  tab === "pill" ? "bg-primary scale-110 shadow-primary/30" : "bg-primary/70"
+                }`}
+              >
+                <span className="text-2xl">💊</span>
+              </div>
+              <span
+                className={`text-xs mt-1 font-semibold ${
+                  tab === "pill" ? "text-primary" : "text-muted-foreground"
+                }`}
+              >
+                Pilule
+              </span>
+            </button>
+          </div>
+
           <button
             onClick={() => setTab("account")}
-            className={`flex-1 flex flex-col items-center gap-0.5 py-3 text-xs transition-colors ${tab === "account" ? "text-primary" : "text-muted-foreground"}`}
+            className={`flex-1 flex flex-col items-center gap-0.5 py-2 text-xs transition-colors ${
+              tab === "account" ? "text-primary" : "text-muted-foreground"
+            }`}
           >
             <User className="h-5 w-5" />
             Compte
