@@ -116,6 +116,42 @@ export default function Dashboard({
 
   useEffect(() => { loadData() }, [loadData])
 
+  // Real-time: sync pill_logs and profiles automatically
+  useEffect(() => {
+    const channel = supabase
+      .channel(`pillow-rt-${userId}`)
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "pill_logs", filter: `user_id=eq.${userId}` },
+        (payload) => {
+          if (payload.eventType === "INSERT" || payload.eventType === "UPDATE") {
+            const row = payload.new as PillLog
+            setPillLogs((prev) => {
+              const exists = prev.some((l) => l.date === row.date)
+              if (exists) return prev.map((l) => l.date === row.date ? row : l)
+              return [row, ...prev].sort((a, b) => b.date.localeCompare(a.date))
+            })
+            if (row.date === today && row.taken) {
+              setTakenToday(true)
+              localStorage.setItem(TAKEN_KEY, today)
+            }
+          }
+        }
+      )
+      .on(
+        "postgres_changes",
+        { event: "UPDATE", schema: "public", table: "profiles", filter: `id=eq.${userId}` },
+        (payload) => {
+          const row = payload.new as Profile
+          setProfile(row)
+          setEditProfile(row)
+        }
+      )
+      .subscribe()
+
+    return () => { supabase.removeChannel(channel) }
+  }, [supabase, userId, today])
+
   // Countdown to pill time
   useEffect(() => {
     if (!profile?.pill_time) return

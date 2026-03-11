@@ -7,7 +7,7 @@ import { Input } from "@/components/ui/input"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Label } from "@/components/ui/label"
 
-export default function Auth({ onAuth }: { onAuth: () => void }) {
+export default function Auth({ onAuth }: { onAuth: (uid: string) => void }) {
   const [mode, setMode] = useState<"signin" | "signup">("signin")
   const [email, setEmail] = useState("")
   const [password, setPassword] = useState("")
@@ -31,13 +31,13 @@ export default function Auth({ onAuth }: { onAuth: () => void }) {
         setSuccess("Compte créé ! Vérifie tes emails pour confirmer.")
       }
     } else {
-      const { error } = await supabase.auth.signInWithPassword({ email, password })
+      const { data, error } = await supabase.auth.signInWithPassword({ email, password })
       if (error) {
         setError(error.message === "Invalid login credentials"
           ? "Email ou mot de passe incorrect."
           : error.message)
-      } else {
-        onAuth()
+      } else if (data.user) {
+        onAuth(data.user.id)
       }
     }
     setLoading(false)
