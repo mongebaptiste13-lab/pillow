@@ -1,7 +1,6 @@
 "use client"
 
 import { useState } from "react"
-import { createClient } from "@/lib/supabase-client"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
@@ -15,30 +14,56 @@ export default function Auth({ onAuth }: { onAuth: (uid: string) => void }) {
   const [error, setError] = useState<string | null>(null)
   const [success, setSuccess] = useState<string | null>(null)
 
-  const supabase = createClient()
+  // Detect missing config early
+  const missingConfig = !process.env.NEXT_PUBLIC_SUPABASE_URL || !process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
     setError(null)
     setSuccess(null)
-    setLoading(true)
 
-    if (mode === "signup") {
-      const { error } = await supabase.auth.signUp({ email, password })
-      if (error) {
-        setError(error.message)
+    if (missingConfig) {
+      setError("Configuration manquante. Les variables d'environnement Supabase ne sont pas définies sur ce déploiement.")
+      return
+    }
+
+    setLoading(true)
+    try {
+      const { createClient } = await import("@/lib/supabase-client")
+      const supabase = createClient()
+
+      if (mode === "signup") {
+        const { data, error } = await supabase.auth.signUp({ email, password })
+        if (error) {
+          setError(
+            error.message.includes("rate limit") ? "Trop d'essais, réessaie dans quelques minutes." :
+            error.message.includes("already registered") ? "Cet email est déjà utilisé. Connecte-toi !" :
+            error.message
+          )
+        } else if (data.user) {
+          if (data.session) {
+            // Email confirmation disabled → direct login
+            onAuth(data.user.id)
+          } else {
+            setSuccess("Compte créé ! Vérifie tes emails pour confirmer puis reviens te connecter.")
+          }
+        }
       } else {
-        setSuccess("Compte créé ! Vérifie tes emails pour confirmer.")
+        const { data, error } = await supabase.auth.signInWithPassword({ email, password })
+        if (error) {
+          setError(
+            error.message === "Invalid login credentials"
+              ? "Email ou mot de passe incorrect."
+              : error.message.includes("Email not confirmed")
+              ? "Confirme d'abord ton email (vérifie ta boîte mail)."
+              : error.message
+          )
+        } else if (data.user) {
+          onAuth(data.user.id)
+        }
       }
-    } else {
-      const { data, error } = await supabase.auth.signInWithPassword({ email, password })
-      if (error) {
-        setError(error.message === "Invalid login credentials"
-          ? "Email ou mot de passe incorrect."
-          : error.message)
-      } else if (data.user) {
-        onAuth(data.user.id)
-      }
+    } catch (err) {
+      setError(`Impossible de contacter Supabase. Vérifie ta connexion internet.\n${err instanceof Error ? err.message : ""}`)
     }
     setLoading(false)
   }
@@ -46,16 +71,10 @@ export default function Auth({ onAuth }: { onAuth: (uid: string) => void }) {
   return (
     <div className="min-h-screen flex items-center justify-center bg-background px-4">
       <div className="w-full max-w-sm">
-        {/* Logo */}
         <div className="flex justify-center mb-8">
           <div className="w-20 h-20 rounded-2xl overflow-hidden bg-primary/10 flex items-center justify-center shadow-lg">
             {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img
-              src="/pillow-logo.png"
-              alt="Pillow"
-              className="w-full h-full object-cover scale-[1.7]"
-              style={{ objectPosition: "center" }}
-            />
+            <img src="/pillow-logo.png" alt="Pillow" className="w-full h-full object-cover scale-[1.7]" />
           </div>
         </div>
 
@@ -68,6 +87,12 @@ export default function Auth({ onAuth }: { onAuth: (uid: string) => void }) {
           </CardHeader>
 
           <CardContent>
+            {missingConfig && (
+              <div className="rounded-lg bg-amber-100 text-amber-800 dark:bg-amber-950 dark:text-amber-200 px-3 py-2 text-xs mb-4">
+                ⚠️ Variables Supabase manquantes sur ce déploiement — ajoute-les dans Netlify.
+              </div>
+            )}
+
             <form onSubmit={handleSubmit} className="space-y-4">
               <div className="space-y-1.5">
                 <Label htmlFor="email">Email</Label>
@@ -96,14 +121,14 @@ export default function Auth({ onAuth }: { onAuth: (uid: string) => void }) {
               </div>
 
               {error && (
-                <div className="rounded-lg bg-destructive/10 text-destructive px-3 py-2 text-sm">{error}</div>
+                <div className="rounded-lg bg-destructive/10 text-destructive px-3 py-2 text-sm whitespace-pre-wrap">{error}</div>
               )}
               {success && (
                 <div className="rounded-lg bg-green-100 text-green-700 dark:bg-green-950 dark:text-green-300 px-3 py-2 text-sm">{success}</div>
               )}
 
               <Button type="submit" className="w-full" disabled={loading}>
-                {loading ? "Chargement..." : mode === "signin" ? "Se connecter" : "Créer le compte"}
+                {loading ? "Connexion…" : mode === "signin" ? "Se connecter" : "Créer le compte"}
               </Button>
             </form>
 
@@ -111,14 +136,20 @@ export default function Auth({ onAuth }: { onAuth: (uid: string) => void }) {
               {mode === "signin" ? (
                 <>
                   Pas encore de compte ?{" "}
-                  <button onClick={() => { setMode("signup"); setError(null); setSuccess(null) }} className="text-primary font-medium hover:underline">
+                  <button
+                    onClick={() => { setMode("signup"); setError(null); setSuccess(null) }}
+                    className="text-primary font-medium hover:underline"
+                  >
                     S'inscrire
                   </button>
                 </>
               ) : (
                 <>
                   Déjà un compte ?{" "}
-                  <button onClick={() => { setMode("signin"); setError(null); setSuccess(null) }} className="text-primary font-medium hover:underline">
+                  <button
+                    onClick={() => { setMode("signin"); setError(null); setSuccess(null) }}
+                    className="text-primary font-medium hover:underline"
+                  >
                     Se connecter
                   </button>
                 </>
