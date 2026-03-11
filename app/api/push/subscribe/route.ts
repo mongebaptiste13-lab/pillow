@@ -2,12 +2,13 @@ import { NextResponse } from "next/server"
 import { createServerSupabaseClient } from "@/lib/supabase-server"
 
 export async function POST(req: Request) {
-  const supabase = await createServerSupabaseClient()
+  const supabase = createServerSupabaseClient(req)
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
 
   const { endpoint, p256dh, auth } = await req.json()
-  if (!endpoint || !p256dh || !auth) return NextResponse.json({ error: "Missing fields" }, { status: 400 })
+  if (!endpoint || !p256dh || !auth)
+    return NextResponse.json({ error: "Missing fields" }, { status: 400 })
 
   const { error } = await supabase.from("push_subscriptions").upsert(
     { user_id: user.id, endpoint, p256dh, auth, updated_at: new Date().toISOString() },
@@ -19,7 +20,7 @@ export async function POST(req: Request) {
 }
 
 export async function DELETE(req: Request) {
-  const supabase = await createServerSupabaseClient()
+  const supabase = createServerSupabaseClient(req)
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
 

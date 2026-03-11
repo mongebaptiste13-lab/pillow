@@ -3,7 +3,7 @@ import { createServerSupabaseClient } from "@/lib/supabase-server"
 import { getFollowUpNotificationMessage } from "@/lib/notifications"
 
 export async function POST(req: Request) {
-  const supabase = await createServerSupabaseClient()
+  const supabase = createServerSupabaseClient(req)
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
 
@@ -33,7 +33,7 @@ export async function POST(req: Request) {
 }
 
 export async function GET(req: Request) {
-  const supabase = await createServerSupabaseClient()
+  const supabase = createServerSupabaseClient(req)
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
 

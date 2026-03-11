@@ -3,22 +3,45 @@
 import { useState, useEffect, useCallback } from "react"
 
 export type PushStatus =
-  | "idle"        // not subscribed
-  | "loading"     // in progress
-  | "subscribed"  // active
-  | "denied"      // browser blocked
-  | "unsupported" // browser/OS doesn't support it
-  | "error"       // something failed
+  | "idle"
+  | "loading"
+  | "subscribed"
+  | "denied"
+  | "unsupported"
+  | "error"
 
-// SW ready with a timeout so it never hangs
-async function swReady(timeoutMs = 8000): Promise<ServiceWorkerRegistration> {
-  // Register if not already registered
+// Get access token from the Supabase singleton stored in localStorage
+async function getAccessToken(): Promise<string | null> {
+  try {
+    const { createClient } = await import("@/lib/supabase-client")
+    const sb = createClient()
+    const { data: { session } } = await sb.auth.getSession()
+    return session?.access_token ?? null
+  } catch {
+    return null
+  }
+}
+
+// Authenticated fetch helper — adds Bearer token automatically
+async function authFetch(url: string, options: RequestInit = {}): Promise<Response> {
+  const token = await getAccessToken()
+  return fetch(url, {
+    ...options,
+    headers: {
+      "Content-Type": "application/json",
+      ...(token ? { Authorization: `Bearer ${token}` } : {}),
+      ...(options.headers ?? {}),
+    },
+  })
+}
+
+// Register SW and return ready registration (with timeout)
+async function swReady(timeoutMs = 10000): Promise<ServiceWorkerRegistration> {
   if ("serviceWorker" in navigator) {
     try {
       await navigator.serviceWorker.register("/service-worker.js", { scope: "/" })
     } catch {}
   }
-
   return Promise.race([
     navigator.serviceWorker.ready,
     new Promise<never>((_, reject) =>
@@ -30,26 +53,12 @@ async function swReady(timeoutMs = 8000): Promise<ServiceWorkerRegistration> {
 export function usePushNotifications() {
   const [status, setStatus] = useState<PushStatus>("idle")
 
-  // Detect support & initial state on mount
   useEffect(() => {
     if (typeof window === "undefined") return
+    const ok = "serviceWorker" in navigator && "PushManager" in window && "Notification" in window
+    if (!ok) { setStatus("unsupported"); return }
+    if (Notification.permission === "denied") { setStatus("denied"); return }
 
-    const isSupported =
-      "serviceWorker" in navigator &&
-      "PushManager" in window &&
-      "Notification" in window
-
-    if (!isSupported) {
-      setStatus("unsupported")
-      return
-    }
-
-    if (Notification.permission === "denied") {
-      setStatus("denied")
-      return
-    }
-
-    // Check if already subscribed
     navigator.serviceWorker.ready
       .then((reg) => reg.pushManager.getSubscription())
       .then((sub) => setStatus(sub ? "subscribed" : "idle"))
@@ -57,42 +66,22 @@ export function usePushNotifications() {
   }, [])
 
   const subscribe = useCallback(async () => {
-    const isSupported =
-      "serviceWorker" in navigator &&
-      "PushManager" in window &&
-      "Notification" in window
-
-    if (!isSupported) {
-      setStatus("unsupported")
-      return
-    }
+    const ok = "serviceWorker" in navigator && "PushManager" in window && "Notification" in window
+    if (!ok) { setStatus("unsupported"); return }
 
     setStatus("loading")
-
     try {
-      // Request permission
       const permission = await Notification.requestPermission()
-      if (permission !== "granted") {
-        setStatus("denied")
-        return
-      }
+      if (permission !== "granted") { setStatus("denied"); return }
 
-      // Get SW registration with timeout
       const reg = await swReady(10000)
 
-      // Unsubscribe existing
       const existing = await reg.pushManager.getSubscription()
       if (existing) await existing.unsubscribe()
 
-      // Check VAPID key
       const vapidKey = process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY
-      if (!vapidKey) {
-        console.error("[Push] NEXT_PUBLIC_VAPID_PUBLIC_KEY is missing")
-        setStatus("error")
-        return
-      }
+      if (!vapidKey) { console.error("[Push] VAPID key missing"); setStatus("error"); return }
 
-      // Subscribe
       const sub = await reg.pushManager.subscribe({
         userVisibleOnly: true,
         applicationServerKey: urlB64ToUint8Array(vapidKey),
@@ -100,28 +89,21 @@ export function usePushNotifications() {
 
       const json = sub.toJSON() as { endpoint: string; keys: { p256dh: string; auth: string } }
 
-      // Save to backend
-      const res = await fetch("/api/push/subscribe", {
+      const res = await authFetch("/api/push/subscribe", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          endpoint: json.endpoint,
-          p256dh: json.keys.p256dh,
-          auth: json.keys.auth,
-        }),
+        body: JSON.stringify({ endpoint: json.endpoint, p256dh: json.keys.p256dh, auth: json.keys.auth }),
       })
 
-      if (!res.ok) throw new Error(`Server error ${res.status}`)
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}))
+        console.error("[Push] subscribe API error:", res.status, body)
+        throw new Error(`Server ${res.status}`)
+      }
 
       setStatus("subscribed")
     } catch (err) {
       console.error("[Push] subscribe error:", err)
-      // Distinguish timeout vs other errors
-      if (err instanceof Error && err.message.includes("timeout")) {
-        setStatus("unsupported")
-      } else {
-        setStatus("error")
-      }
+      setStatus(err instanceof Error && err.message.includes("timeout") ? "unsupported" : "error")
     }
   }, [])
 
@@ -131,9 +113,8 @@ export function usePushNotifications() {
       const sub = await reg.pushManager.getSubscription()
       if (sub) {
         await sub.unsubscribe()
-        await fetch("/api/push/subscribe", {
+        await authFetch("/api/push/subscribe", {
           method: "DELETE",
-          headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ endpoint: sub.endpoint }),
         })
       }
@@ -142,9 +123,8 @@ export function usePushNotifications() {
   }, [])
 
   const sendPush = useCallback(async (title: string, body: string) => {
-    return fetch("/api/push/send", {
+    return authFetch("/api/push/send", {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ title, body }),
     })
   }, [])

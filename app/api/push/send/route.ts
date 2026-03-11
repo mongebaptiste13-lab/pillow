@@ -3,7 +3,7 @@ import { createServerSupabaseClient } from "@/lib/supabase-server"
 import { sendPushNotification } from "@/lib/web-push-server"
 
 export async function POST(req: Request) {
-  const supabase = await createServerSupabaseClient()
+  const supabase = createServerSupabaseClient(req)
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
 

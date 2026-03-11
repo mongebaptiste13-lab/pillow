@@ -2,12 +2,13 @@ import { NextResponse } from "next/server"
 import { createServerSupabaseClient } from "@/lib/supabase-server"
 
 export async function POST(req: Request) {
-  const supabase = await createServerSupabaseClient()
+  const supabase = createServerSupabaseClient(req)
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
 
   const { type, title, body, scheduledAt } = await req.json()
-  if (!type || !title || !body || !scheduledAt) return NextResponse.json({ error: "Missing fields" }, { status: 400 })
+  if (!type || !title || !body || !scheduledAt)
+    return NextResponse.json({ error: "Missing fields" }, { status: 400 })
 
   await supabase.from("notification_schedules")
     .delete()
@@ -25,7 +26,7 @@ export async function POST(req: Request) {
 }
 
 export async function DELETE(req: Request) {
-  const supabase = await createServerSupabaseClient()
+  const supabase = createServerSupabaseClient(req)
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
 
