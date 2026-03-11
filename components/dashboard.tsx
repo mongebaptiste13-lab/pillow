@@ -79,12 +79,18 @@ export default function Dashboard({
           .limit(90),
       ])
 
-      if (profResult.data) {
-        setProfile(profResult.data)
-        setEditProfile(profResult.data)
-      } else {
-        // No profile — trigger onboarding
+      const profileData = profResult.data
+      const isIncompleteProfile =
+        !profileData?.name ||
+        !profileData?.pill_name ||
+        !profileData?.pill_time
+
+      if (!profileData || isIncompleteProfile) {
+        // No profile or incomplete profile — trigger onboarding
         onNeedsOnboarding?.()
+      } else {
+        setProfile(profileData)
+        setEditProfile(profileData)
       }
 
       if (logsResult.data) {

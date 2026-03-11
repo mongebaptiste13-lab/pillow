@@ -103,6 +103,7 @@ export const FRENCH_PILLS: PillInfo[] = [
 
 export const PILL_NAMES = FRENCH_PILLS.map((p) => p.name)
 
-export function findPill(name: string): PillInfo | undefined {
+export function findPill(name?: string | null): PillInfo | undefined {
+  if (!name) return undefined
   return FRENCH_PILLS.find((p) => p.name.toLowerCase() === name.toLowerCase())
 }

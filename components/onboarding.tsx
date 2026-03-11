@@ -22,6 +22,7 @@ export default function Onboarding({ userId, onComplete }: OnboardingProps) {
   const [pillTime, setPillTime] = useState("08:00")
   const [boxesLeft, setBoxesLeft] = useState<number>(1)
   const [saving, setSaving] = useState(false)
+  const [error, setError] = useState<string | null>(null)
 
   const supabase = createClient()
 
@@ -37,10 +38,15 @@ export default function Onboarding({ userId, onComplete }: OnboardingProps) {
 
   async function handleFinish() {
     if (!name || !selectedPill || !pillTime) return
+    if (!resolvedPill) {
+      setError("Sélectionne une pilule valide.")
+      return
+    }
     setSaving(true)
-    await supabase.from("profiles").upsert({
+    setError(null)
+    const { error } = await supabase.from("profiles").upsert({
       id: userId,
-      name,
+      name: name.trim(),
       pill_name: selectedPill,
       pill_time: pillTime,
       boxes_remaining: boxesLeft,
@@ -49,6 +55,12 @@ export default function Onboarding({ userId, onComplete }: OnboardingProps) {
       updated_at: new Date().toISOString(),
     })
     setSaving(false)
+
+    if (error) {
+      setError("Impossible de sauvegarder ton profil. Réessaie.")
+      return
+    }
+
     onComplete()
   }
 
@@ -228,6 +240,9 @@ export default function Onboarding({ userId, onComplete }: OnboardingProps) {
                   {saving ? "Sauvegarde…" : "C'est parti ! 🎉"}
                 </Button>
               </div>
+              {error && (
+                <p className="text-sm text-destructive text-center">{error}</p>
+              )}
             </CardContent>
           </Card>
         )}
