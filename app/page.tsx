@@ -1,42 +1,49 @@
 "use client"
 
-import { useEffect, useState, useCallback } from "react"
+import { useEffect, useState, useRef } from "react"
 import Auth from "@/components/auth"
 import Onboarding from "@/components/onboarding"
 import Dashboard from "@/components/dashboard"
 import { Loader2 } from "lucide-react"
-import type { User } from "@supabase/supabase-js"
 
 type AppState = "loading" | "auth" | "onboarding" | "app"
 
-const CACHE_KEY = "pillow:uid"
-
 export default function Home() {
-  // Fast path: if we know the user was logged in before, show spinner only briefly
   const [appState, setAppState] = useState<AppState>("loading")
   const [userId, setUserId] = useState<string | null>(null)
+  const supabaseRef = useRef<Awaited<ReturnType<typeof import("@/lib/supabase-client").createClient>> | null>(null)
 
-  const goTo = useCallback((state: AppState, uid?: string) => {
-    if (uid) {
+  async function getSupabase() {
+    if (supabaseRef.current) return supabaseRef.current
+    const { createClient } = await import("@/lib/supabase-client")
+    supabaseRef.current = createClient()
+    return supabaseRef.current
+  }
+
+  async function checkProfileAndNavigate(uid: string) {
+    try {
+      const sb = await getSupabase()
+      const { data: profile } = await sb
+        .from("profiles")
+        .select("name, pill_name, pill_time")
+        .eq("id", uid)
+        .maybeSingle()
+      const complete = !!(profile?.name && profile?.pill_name && profile?.pill_time)
       setUserId(uid)
-      localStorage.setItem(CACHE_KEY, uid)
+      setAppState(complete ? "app" : "onboarding")
+    } catch {
+      setUserId(uid)
+      setAppState("onboarding")
     }
-    setAppState(state)
-  }, [])
+  }
 
   useEffect(() => {
     let mounted = true
 
-    // If user was previously connected, skip straight to loading-then-app
-    const cachedUid = localStorage.getItem(CACHE_KEY)
-
-    // Hard bail: max 6s loading no matter what
+    // Bail: never stay in loading > 7s
     const bail = setTimeout(() => {
-      if (mounted) {
-        localStorage.removeItem(CACHE_KEY)
-        setAppState("auth")
-      }
-    }, 6000)
+      if (mounted) setAppState("auth")
+    }, 7000)
 
     async function boot() {
       // Check env vars
@@ -46,65 +53,50 @@ export default function Home() {
         return
       }
 
-      let sb: ReturnType<typeof import("@/lib/supabase-client").createClient>
       try {
-        const mod = await import("@/lib/supabase-client")
-        sb = mod.createClient()
+        const sb = await getSupabase()
+
+        // Direct session check — simpler and more reliable than onAuthStateChange for initial load
+        const { data: { session } } = await sb.auth.getSession()
+        clearTimeout(bail)
+
+        if (!mounted) return
+
+        if (!session?.user) {
+          setAppState("auth")
+          return
+        }
+
+        await checkProfileAndNavigate(session.user.id)
+
+        // Only listen for sign out after initial check
+        sb.auth.onAuthStateChange((event) => {
+          if (!mounted) return
+          if (event === "SIGNED_OUT") {
+            setAppState("auth")
+            setUserId(null)
+          }
+        })
       } catch {
         clearTimeout(bail)
-        if (mounted) { localStorage.removeItem(CACHE_KEY); setAppState("auth") }
-        return
+        if (mounted) setAppState("auth")
       }
-
-      // If cached uid → optimistically show app while we verify
-      if (cachedUid && mounted) setUserId(cachedUid)
-
-      // Listen to auth state (fires INITIAL_SESSION on first call)
-      const { data: { subscription } } = sb.auth.onAuthStateChange(
-        async (event, session) => {
-          if (!mounted) return
-          clearTimeout(bail)
-
-          if (!session?.user) {
-            localStorage.removeItem(CACHE_KEY)
-            setUserId(null)
-            setAppState("auth")
-            return
-          }
-
-          const uid = session.user.id
-          setUserId(uid)
-          localStorage.setItem(CACHE_KEY, uid)
-
-          // Check profile completeness
-          try {
-            const { data: profile } = await sb
-              .from("profiles")
-              .select("name, pill_name, pill_time")
-              .eq("id", uid)
-              .maybeSingle()
-
-            if (!mounted) return
-            const complete = !!(profile?.name && profile?.pill_name && profile?.pill_time)
-            setAppState(complete ? "app" : "onboarding")
-          } catch {
-            if (mounted) setAppState("onboarding")
-          }
-        }
-      )
-
-      return () => subscription.unsubscribe()
     }
 
-    let cleanup: (() => void) | undefined
-    boot().then((fn) => { cleanup = fn })
+    boot()
 
     return () => {
       mounted = false
       clearTimeout(bail)
-      cleanup?.()
     }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
+
+  // Called by Auth after successful sign in — no reload needed
+  async function handleAuth(uid: string) {
+    setAppState("loading")
+    await checkProfileAndNavigate(uid)
+  }
 
   if (appState === "loading") {
     return (
@@ -119,16 +111,7 @@ export default function Home() {
   }
 
   if (appState === "auth") {
-    return (
-      <Auth
-        onAuth={(uid) => {
-          setUserId(uid)
-          localStorage.setItem(CACHE_KEY, uid)
-          // After sign in, reload to re-run boot() cleanly
-          window.location.reload()
-        }}
-      />
-    )
+    return <Auth onAuth={handleAuth} />
   }
 
   if (appState === "onboarding" && userId) {
@@ -139,12 +122,5 @@ export default function Home() {
     return <Dashboard userId={userId} onNeedsOnboarding={() => setAppState("onboarding")} />
   }
 
-  return (
-    <Auth
-      onAuth={(uid) => {
-        localStorage.setItem(CACHE_KEY, uid)
-        window.location.reload()
-      }}
-    />
-  )
+  return <Auth onAuth={handleAuth} />
 }
