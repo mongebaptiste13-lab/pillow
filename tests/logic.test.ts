@@ -3,6 +3,7 @@ import assert from "node:assert/strict"
 import { zonedParts, addDaysToKey, diffDays, localDateKey } from "../lib/date"
 import { getPackStatus, getBlisterLayout } from "../lib/pack"
 import { computeStats, type LogMap } from "../lib/stats"
+import { addMonthsToKey, getPrescriptionInfo, getStockInfo, getStockLevel } from "../lib/supply"
 
 test("zonedParts : le jour local change à minuit heure de Paris, pas à minuit UTC", () => {
   // 22h30 UTC un 22 octobre = 00h30 le 23 à Paris (UTC+2)
@@ -114,4 +115,62 @@ test("computeStats : avant l'inscription, aucun oubli n'est compté", () => {
   })
   assert.equal(stats.adherence30, null)
   assert.equal(stats.currentStreak, 0)
+})
+
+test("getStockInfo 21/7 : boîtes de réserve, reste de la plaquette en cours et dernier comprimé (pauses incluses)", () => {
+  // Plaquette démarrée le 15/10 → le 22/10 on est au jour 8 : il reste 14 comprimés (aujourd'hui compris)
+  const info = getStockInfo({ pillType: "21_7", packStartDate: "2026-10-15", perBox: 21, daysLeft: 14 + 21 + 5, todayKey: "2026-10-22", takenToday: false })
+  assert.equal(info.currentPackLeft, 14)
+  assert.equal(info.reserveBoxes, 1)
+  assert.equal(info.looseDays, 5)
+  // 14 jours jusqu'au 4/11, pause 5→11/11, 21 jours du 12/11 au 2/12, pause 3→9/12, puis 5 jours du 10/12 → dernier comprimé le 14/12
+  assert.equal(info.lastPillDate, "2026-12-14")
+  assert.equal(info.empty, false)
+
+  const taken = getStockInfo({ pillType: "21_7", packStartDate: "2026-10-15", perBox: 21, daysLeft: 13, todayKey: "2026-10-22", takenToday: true })
+  assert.equal(taken.currentPackLeft, 13)
+  assert.equal(taken.lastPillDate, "2026-11-04")
+})
+
+test("getStockInfo : pause → plaquette en cours terminée, tout le stock est en réserve", () => {
+  const info = getStockInfo({ pillType: "21_7", packStartDate: "2026-10-01", perBox: 21, daysLeft: 42, todayKey: "2026-10-23", takenToday: false })
+  assert.equal(info.currentPackLeft, 0)
+  assert.equal(info.reserveBoxes, 2)
+})
+
+test("getStockInfo : prise continue, et stock vide", () => {
+  const info = getStockInfo({ pillType: "28_continu", packStartDate: "2026-10-15", perBox: 28, daysLeft: 50, todayKey: "2026-10-22", takenToday: false })
+  assert.equal(info.currentPackLeft, 21) // jour 8 sur 28 → 21 restants
+  assert.equal(info.reserveBoxes, 1)
+  assert.equal(info.looseDays, 1)
+  const empty = getStockInfo({ pillType: "28_continu", packStartDate: null, perBox: 28, daysLeft: 0, todayKey: "2026-10-22", takenToday: false })
+  assert.equal(empty.empty, true)
+  assert.equal(empty.lastPillDate, null)
+})
+
+test("getStockLevel", () => {
+  assert.equal(getStockLevel(30, 7), "ok")
+  assert.equal(getStockLevel(7, 7), "low")
+  assert.equal(getStockLevel(3, 7), "urgent")
+  assert.equal(getStockLevel(0, 7), "empty")
+})
+
+test("getPrescriptionInfo : paliers et niveaux", () => {
+  const at = (end: string) => getPrescriptionInfo(end, "2026-10-22")
+  assert.deepEqual(at("2027-06-01"), { daysLeft: 222, level: "ok", bucket: null })
+  assert.equal(at("2026-11-21").bucket, 30)
+  assert.equal(at("2026-11-04").bucket, 14)
+  assert.equal(at("2026-10-29").bucket, 7)
+  assert.equal(at("2026-10-25").bucket, 3)
+  assert.equal(at("2026-10-22").bucket, 0)
+  assert.equal(at("2026-10-21").level, "expired")
+  assert.equal(at("2026-10-21").bucket, -1)
+  assert.equal(at("2026-10-25").level, "urgent")
+  assert.deepEqual(getPrescriptionInfo(null, "2026-10-22"), { daysLeft: null, level: "none", bucket: null })
+})
+
+test("addMonthsToKey gère les fins de mois et les années", () => {
+  assert.equal(addMonthsToKey("2026-10-22", 12), "2027-10-22")
+  assert.equal(addMonthsToKey("2026-08-31", 6), "2027-02-28")
+  assert.equal(addMonthsToKey("2026-10-22", 3), "2027-01-22")
 })

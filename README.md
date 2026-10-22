@@ -30,7 +30,7 @@ pnpm dev
 | `CRON_SECRET` | secret partagé qui protège `/api/cron/dispatch` |
 
 Les rappels sont envoyés par un **dispatcher serveur** (`/api/cron/dispatch`) qui doit être appelé **chaque minute**. Il envoie :
-rappel à l'heure de prise, jusqu'à 3 relances toutes les 30 min, rappels « plus tard », alerte de stock (9 h), rappel de reprise après la pause (18 h la veille). Les envois sont dédoublonnés (aucun doublon même si le cron se chevauche) et respectent le fuseau horaire de chaque utilisatrice.
+rappel à l'heure de prise, jusqu'à 3 relances toutes les 30 min, rappels « plus tard », alerte de stock (9 h : une fois sous le seuil, puis chaque matin dès 3 jours restants), rappel de reprise après la pause (18 h la veille) et fin d'ordonnance (10 h : 30, 14, 7 et 3 jours avant, le dernier jour, puis une fois si elle a expiré). Les envois sont dédoublonnés (aucun doublon même si le cron se chevauche) et respectent le fuseau horaire de chaque utilisatrice.
 
 Deux façons de le déclencher, au choix :
 
@@ -47,6 +47,12 @@ curl -H "Authorization: Bearer $CRON_SECRET" https://ton-site/api/cron/dispatch
 
 - **Android / desktop** : bouton « Installer » dans Réglages (ou menu du navigateur).
 - **iPhone** : les notifications push ne fonctionnent qu'une fois l'app **ajoutée à l'écran d'accueil** (Partager → *Sur l'écran d'accueil*), iOS 16.4 minimum. Active ensuite les notifications depuis Réglages.
+
+## Suivi de plaquette, stock et ordonnance
+
+- **Où j'en suis** : à l'inscription (« j'ai déjà commencé, jour 8 ») ou plus tard via *Plaquette → Corriger ma progression*. L'app affiche le jour en cours, les comprimés restants, la prochaine pause ou nouvelle plaquette.
+- **Stock** : jours restants, détail plaquette en cours / boîtes en réserve, date estimée du dernier comprimé (pauses incluses), rachat en un geste, seuil d'alerte réglable.
+- **Ordonnance** : date de fin (raccourcis 3 mois / 6 mois / 1 an), compte à rebours, bannière sur l'accueil à 30 jours, notifications par palier.
 
 ## Scripts
 

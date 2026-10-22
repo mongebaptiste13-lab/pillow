@@ -21,6 +21,9 @@ export type ProfileRow = {
   notif_nag: boolean
   notif_stock: boolean
   notif_restart: boolean
+  /** Fin de validité de l'ordonnance (YYYY-MM-DD) */
+  prescription_end_date: string | null
+  notif_prescription: boolean
   created_at: string | null
   updated_at: string | null
 }
@@ -63,6 +66,10 @@ export type NotificationStateRow = {
   last_sent_at: string | null
   stock_date: string | null
   restart_date: string | null
+  /** Dernier palier de stock notifié (`t|seuil` ou `d|jour` en mode urgent) */
+  stock_key: string | null
+  /** Dernier palier d'ordonnance notifié (`fin|palier`) */
+  rx_key: string | null
   updated_at: string | null
 }
 

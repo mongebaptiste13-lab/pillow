@@ -12,6 +12,7 @@ function profile(over: Record<string, unknown> = {}) {
     boxes_remaining: 1, days_remaining: 20, stock_alert_days: 7,
     timezone: "Europe/Paris", pack_start_date: null,
     notif_reminder: true, notif_nag: true, notif_stock: true, notif_restart: true,
+    prescription_end_date: null, notif_prescription: true,
     created_at: null, updated_at: null,
     ...over,
   }
@@ -141,15 +142,103 @@ test("rappel de reprise la veille à 18 h (dernier jour de pause), une seule foi
   assert.deepEqual(w.kinds(), ["restart"])
 })
 
-test("alerte de stock à 9 h quand le stock passe sous le seuil, une fois par jour", async () => {
+test("alerte de stock à 9 h : une seule fois en passant sous le seuil, pas tous les jours", async () => {
   const w = world({ profile: { days_remaining: 5, pill_time: "22:00" }, logs: [{ date: "2026-10-22", taken: true }] })
   await w.run("2026-10-22T06:59:00Z") // 8h59
   assert.equal(w.sent.length, 0)
   await w.run("2026-10-22T07:00:00Z") // 9h00
   await w.run("2026-10-22T07:01:00Z")
   assert.deepEqual(w.kinds(), ["stock"])
-  await w.run("2026-10-23T07:00:00Z") // le lendemain
-  assert.deepEqual(w.kinds(), ["stock", "stock"])
+  assert.match(w.sent[0].payload.body, /Dernier comprimé/)
+  await w.run("2026-10-23T07:00:00Z") // le lendemain : déjà prévenue, pas urgent
+  assert.deepEqual(w.kinds(), ["stock"])
+})
+
+test("stock urgent (3 jours ou moins) : une alerte chaque matin", async () => {
+  const w = world({ profile: { days_remaining: 3, pill_time: "22:00" } })
+  await w.run("2026-10-22T07:00:00Z")
+  await w.run("2026-10-22T07:05:00Z")
+  await w.run("2026-10-23T07:00:00Z")
+  await w.run("2026-10-24T07:00:00Z")
+  assert.deepEqual(w.kinds(), ["stock", "stock", "stock"])
+})
+
+test("stock vide : message « plus de pilules »", async () => {
+  const w = world({ profile: { days_remaining: 0, pill_time: "22:00" } })
+  await w.run("2026-10-22T07:00:00Z")
+  assert.deepEqual(w.kinds(), ["stock"])
+  assert.match(w.sent[0].payload.body, /pharmacie/i)
+})
+
+test("après un réachat, le prochain passage sous le seuil prévient de nouveau", async () => {
+  const w = world({ profile: { days_remaining: 6, pill_time: "22:00" } })
+  await w.run("2026-10-22T07:00:00Z")
+  assert.equal(w.sent.length, 1)
+  w.tables.profiles[0].days_remaining = 40 // réachat de 2 boîtes
+  await w.run("2026-10-23T07:00:00Z")
+  assert.equal(w.sent.length, 1)
+  w.tables.profiles[0].days_remaining = 7 // plus tard, repasse sous le seuil
+  await w.run("2026-12-01T08:00:00Z") // 9h Paris (hiver)
+  assert.equal(w.sent.length, 2)
+})
+
+test("alerte de stock désactivée → rien", async () => {
+  const w = world({ profile: { days_remaining: 1, pill_time: "22:00", notif_stock: false } })
+  await w.run("2026-10-22T07:00:00Z")
+  assert.equal(w.sent.length, 0)
+})
+
+test("ordonnance : une alerte par palier (30, 14, 7, 3 jours), jamais deux fois le même", async () => {
+  // fin le 2026-11-21 ; 10h Paris = 08:00 UTC (heure d'été), 09:00 UTC après le 25/10
+  const w = world({ profile: { days_remaining: 90, pill_time: "22:00", prescription_end_date: "2026-11-21" } })
+  await w.run("2026-10-22T07:59:00Z") // 9h59, trop tôt
+  assert.equal(w.sent.length, 0)
+  await w.run("2026-10-22T08:00:00Z") // 30 jours restants → palier 30
+  await w.run("2026-10-22T08:30:00Z")
+  assert.equal(w.sent.length, 1)
+  assert.equal(w.sent[0].payload.kind, "prescription")
+  assert.match(w.sent[0].payload.body, /30 jours/)
+
+  await w.run("2026-11-01T09:00:00Z") // 20 jours : toujours palier 30, déjà notifié
+  assert.equal(w.sent.length, 1)
+  await w.run("2026-11-07T09:00:00Z") // 14 jours
+  await w.run("2026-11-14T09:00:00Z") // 7 jours
+  await w.run("2026-11-18T09:00:00Z") // 3 jours
+  assert.equal(w.sent.length, 4)
+  await w.run("2026-11-19T09:00:00Z") // 2 jours : palier 3 déjà fait
+  assert.equal(w.sent.length, 4)
+  await w.run("2026-11-21T09:00:00Z") // dernier jour
+  assert.equal(w.sent.length, 5)
+  assert.match(w.sent[4].payload.body, /aujourd'hui/)
+  await w.run("2026-11-22T09:00:00Z") // expirée
+  assert.equal(w.sent.length, 6)
+  assert.match(w.sent[5].payload.body, /expiré/)
+  await w.run("2026-11-23T09:00:00Z") // pas de harcèlement ensuite
+  assert.equal(w.sent.length, 6)
+})
+
+test("ordonnance : plus de 30 jours devant soi → aucune alerte", async () => {
+  const w = world({ profile: { days_remaining: 90, pill_time: "22:00", prescription_end_date: "2027-03-01" } })
+  await w.run("2026-10-22T08:00:00Z")
+  assert.equal(w.sent.length, 0)
+})
+
+test("ordonnance : nouvelle date saisie → les alertes repartent", async () => {
+  const w = world({ profile: { days_remaining: 90, pill_time: "22:00", prescription_end_date: "2026-11-01" } })
+  await w.run("2026-10-22T08:00:00Z") // 10 jours → palier 14
+  assert.equal(w.sent.length, 1)
+  w.tables.profiles[0].prescription_end_date = "2026-10-30" // corrigée à 8 jours : palier 14 sous une autre date
+  await w.run("2026-10-22T08:05:00Z")
+  assert.equal(w.sent.length, 2)
+})
+
+test("ordonnance : alerte désactivée ou pas de date → rien", async () => {
+  const off = world({ profile: { days_remaining: 90, pill_time: "22:00", prescription_end_date: "2026-10-25", notif_prescription: false } })
+  await off.run("2026-10-22T08:00:00Z")
+  assert.equal(off.sent.length, 0)
+  const none = world({ profile: { days_remaining: 90, pill_time: "22:00" } })
+  await none.run("2026-10-22T08:00:00Z")
+  assert.equal(none.sent.length, 0)
 })
 
 test("pas d'alerte de stock si le stock est suffisant", async () => {

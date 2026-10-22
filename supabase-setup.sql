@@ -31,6 +31,9 @@ alter table public.profiles add column if not exists notif_reminder    boolean n
 alter table public.profiles add column if not exists notif_nag         boolean not null default true;
 alter table public.profiles add column if not exists notif_stock       boolean not null default true;
 alter table public.profiles add column if not exists notif_restart     boolean not null default true;
+-- Ordonnance : date de fin de validité + alerte
+alter table public.profiles add column if not exists prescription_end_date date;
+alter table public.profiles add column if not exists notif_prescription    boolean not null default true;
 
 alter table public.profiles enable row level security;
 drop policy if exists "Users can view own profile"   on public.profiles;
@@ -49,6 +52,9 @@ begin
   return new;
 end;
 $$;
+
+-- Fonction réservée au déclencheur : inutile de l'exposer via l'API
+revoke execute on function public.handle_new_user() from public, anon, authenticated;
 
 drop trigger if exists on_auth_user_created on auth.users;
 create trigger on_auth_user_created
@@ -136,6 +142,10 @@ create table if not exists public.notification_state (
   restart_date   date,
   updated_at     timestamptz default now()
 );
+
+-- Paliers déjà notifiés (une alerte par palier : stock bas, fin d'ordonnance)
+alter table public.notification_state add column if not exists stock_key text;
+alter table public.notification_state add column if not exists rx_key    text;
 
 alter table public.notification_state enable row level security;
 

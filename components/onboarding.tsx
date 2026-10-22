@@ -9,7 +9,8 @@ import { PillSpinner } from "@/components/pill-loader"
 import { createClient } from "@/lib/supabase-client"
 import { FRENCH_PILLS, findPill } from "@/lib/pill-data"
 import { ACTIVE_DAYS, PAUSE_DAYS } from "@/lib/pack"
-import { addDaysToKey, detectTimezone, localDateKey } from "@/lib/date"
+import { addDaysToKey, detectTimezone, formatLongDate, localDateKey } from "@/lib/date"
+import { addMonthsToKey } from "@/lib/supply"
 import { usePushNotifications } from "@/hooks/use-push-notifications"
 import { cn } from "@/lib/utils"
 
@@ -54,6 +55,7 @@ export default function Onboarding({ userId, onComplete }: { userId: string; onC
   const [packDay, setPackDay] = useState(1)
   const [pauseDay, setPauseDay] = useState(1)
   const [reserveBoxes, setReserveBoxes] = useState(1)
+  const [rxEnd, setRxEnd] = useState("")
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
@@ -112,6 +114,7 @@ export default function Onboarding({ userId, onComplete }: { userId: string; onC
       stock_alert_days: 7,
       timezone: detectTimezone(),
       pack_start_date: packStartDate,
+      prescription_end_date: rxEnd || null,
       updated_at: new Date().toISOString(),
     })
     setSaving(false)
@@ -310,6 +313,11 @@ export default function Onboarding({ userId, onComplete }: { userId: string; onC
                   <Stepper value={pauseDay} onChange={setPauseDay} min={1} max={PAUSE_DAYS} label="Jour de pause" />
                 </div>
               )}
+
+              <p className="rounded-xl bg-muted/60 px-3 py-2 text-center text-xs text-muted-foreground">
+                Plaquette commencée le <strong className="text-foreground">{formatLongDate(packStartDate)}</strong>
+                {packState !== "pause" && remainingInCurrentPack > 0 && <> · encore {remainingInCurrentPack} comprimé{remainingInCurrentPack > 1 ? "s" : ""} à prendre</>}
+              </p>
             </div>
           )}
 
@@ -328,6 +336,19 @@ export default function Onboarding({ userId, onComplete }: { userId: string; onC
                 <span className="font-display text-2xl font-semibold text-primary">{daysRemaining}</span>{" "}
                 <span className="text-muted-foreground">jour{daysRemaining > 1 ? "s" : ""} de pilule en tout</span>
                 <p className="mt-0.5 text-xs text-muted-foreground">Je te préviens 7 jours avant la rupture (réglable ensuite).</p>
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="rx-end">Fin de ton ordonnance <span className="font-normal text-muted-foreground">(facultatif)</span></Label>
+                <Input id="rx-end" type="date" value={rxEnd} onChange={(e) => setRxEnd(e.target.value)} className="h-12 rounded-xl text-base" />
+                <div className="flex flex-wrap gap-2">
+                  {[3, 6, 12].map((m) => (
+                    <button key={m} type="button" onClick={() => setRxEnd(addMonthsToKey(localDateKey(), m))} className="rounded-full border px-2.5 py-1 text-xs transition-colors hover:bg-muted">
+                      dans {m === 12 ? "1 an" : `${m} mois`}
+                    </button>
+                  ))}
+                </div>
+                <p className="text-xs text-muted-foreground">Je te rappelle de la renouveler 30, 14, 7 et 3 jours avant.</p>
               </div>
             </div>
           )}

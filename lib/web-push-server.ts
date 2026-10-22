@@ -24,7 +24,7 @@ function ensureConfigured() {
   configured = true
 }
 
-export type PushKind = "reminder" | "nag" | "snooze" | "stock" | "restart" | "test" | "info"
+export type PushKind = "reminder" | "nag" | "snooze" | "stock" | "restart" | "prescription" | "test" | "info"
 
 export interface PushPayload {
   title: string

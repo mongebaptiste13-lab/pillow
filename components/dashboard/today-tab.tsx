@@ -1,11 +1,12 @@
 "use client"
 
 import { useState } from "react"
-import { AlertTriangle, Bell, BellRing, Check, Clock, Flame, Moon, PackageOpen, Percent, RotateCcw, Smartphone, Sparkles, X } from "lucide-react"
+import { AlertTriangle, Bell, BellRing, Check, Clock, FileText, Flame, Moon, PackageOpen, Percent, RotateCcw, Smartphone, Sparkles, X } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { PillSpinner } from "@/components/pill-loader"
 import { addDaysToKey, formatLongDate, formatShortDate, formatTime, timeToMinutes } from "@/lib/date"
-import { phaseOfDay } from "@/lib/pack"
+import { ACTIVE_DAYS, phaseOfDay } from "@/lib/pack"
+import { getPrescriptionInfo, getStockInfo, getStockLevel } from "@/lib/supply"
 import { cn } from "@/lib/utils"
 import type { PushState, TabCommon, TabId } from "@/components/dashboard/types"
 
@@ -66,8 +67,13 @@ export default function TodayTab({
 
   const daysLeft = profile.days_remaining ?? 0
   const alertAt = profile.stock_alert_days ?? 7
-  const lowStock = daysLeft <= alertAt
   const perBox = pillInfo?.daysPerBox ?? 21
+  const stock = getStockInfo({ pillType, packStartDate: profile.pack_start_date, perBox, daysLeft, todayKey, takenToday: taken })
+  const lowStock = getStockLevel(daysLeft, alertAt) !== "ok"
+  const rx = getPrescriptionInfo(profile.prescription_end_date, todayKey)
+  const showRx = rx.level === "expired" || (rx.daysLeft !== null && rx.daysLeft <= 30)
+  const packLength = pillType === "21_7" ? ACTIVE_DAYS : perBox
+  const packPct = isPause ? 100 : Math.min(100, Math.round((pack.day / packLength) * 100))
   const stockPct = Math.min(100, Math.round((daysLeft / Math.max(perBox * 2, alertAt * 2, 1)) * 100))
 
   async function handleTake() {
@@ -215,6 +221,37 @@ export default function TodayTab({
         </div>
       )}
 
+      {/* ───────── Ordonnance bientôt finie ───────── */}
+      {showRx && profile.prescription_end_date && (
+        <button
+          type="button"
+          onClick={() => onGoTo("pack")}
+          className={cn(
+            "flex w-full items-start gap-3 rounded-2xl border p-4 text-left text-sm",
+            rx.level === "expired" || (rx.daysLeft ?? 99) <= 7 ? "border-destructive/40 bg-destructive/10" : "border-warning/40 bg-warning/12",
+          )}
+        >
+          <FileText className="mt-0.5 size-4 shrink-0" />
+          <span>
+            <strong>
+              {rx.level === "expired" ? "Ordonnance expirée" : rx.daysLeft === 0 ? "Ordonnance : dernier jour" : `Ordonnance : ${rx.daysLeft} jour${(rx.daysLeft ?? 0) > 1 ? "s" : ""} restant${(rx.daysLeft ?? 0) > 1 ? "s" : ""}`}
+            </strong>
+            <span className="block text-xs text-muted-foreground">Prévois un rendez-vous pour la renouveler (fin le {formatLongDate(profile.prescription_end_date)}).</span>
+          </span>
+        </button>
+      )}
+
+      {/* ───────── Où j'en suis ───────── */}
+      <button type="button" onClick={() => onGoTo("pack")} className="surface-lux block w-full rounded-2xl p-4 text-left" aria-label="Voir ma plaquette">
+        <div className="flex items-baseline justify-between">
+          <p className="text-xs text-muted-foreground">Ma plaquette</p>
+          <p className="text-sm font-medium">{isPause ? `Pause · jour ${pack.day}/${pack.phaseLength}` : `Jour ${pack.day} sur ${packLength}`}</p>
+        </div>
+        <div className="mt-2 h-2 overflow-hidden rounded-full bg-muted">
+          <div className="h-full rounded-full bg-gradient-to-r from-primary to-gold transition-all duration-700" style={{ width: `${packPct}%` }} />
+        </div>
+      </button>
+
       {/* ───────── Stats rapides ───────── */}
       <div className="grid grid-cols-3 gap-3">
         <div className="surface-lux rounded-2xl p-3 text-center">
@@ -247,6 +284,9 @@ export default function TodayTab({
             <PackageOpen /> Gérer
           </Button>
         </div>
+        <p className="mt-2 text-xs text-muted-foreground">
+          {stock.currentPackLeft} dans la plaquette en cours · {stock.reserveBoxes} boîte{stock.reserveBoxes > 1 ? "s" : ""} en réserve{stock.looseDays > 0 ? ` + ${stock.looseDays} j` : ""}
+        </p>
         <div className="mt-3 h-2 overflow-hidden rounded-full bg-muted" role="progressbar" aria-valuenow={daysLeft} aria-valuemin={0} aria-valuemax={perBox * 2} aria-label="Stock de pilules">
           <div className={cn("h-full rounded-full transition-all duration-700", lowStock ? "bg-destructive" : "bg-gradient-to-r from-primary to-gold")} style={{ width: `${stockPct}%` }} />
         </div>

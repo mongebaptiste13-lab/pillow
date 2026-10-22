@@ -1,4 +1,4 @@
-import { timeToMinutes } from "@/lib/date"
+import { formatLongDate, timeToMinutes } from "@/lib/date"
 
 /**
  * Messages + helpers de notifications.
@@ -75,8 +75,21 @@ export const getReminderNotificationMessage = () => pickRandom(REMINDER_MESSAGES
 export const getNagNotificationMessage = () => pickRandom(NAG_MESSAGES)
 export const getSnoozeReminderMessage = () => pickRandom(SNOOZE_REMINDER_MESSAGES)
 export const getSnoozeFeedbackMessage = () => pickRandom(SNOOZE_MESSAGES)
-export const getStockNotificationMessage = (n: number) =>
-  n <= 0 ? pickRandom(STOCK_EMPTY_MESSAGES) : pickRandom(STOCK_MESSAGES)(n)
+export const getStockNotificationMessage = (n: number, lastPillDate?: string | null) => {
+  if (n <= 0) return pickRandom(STOCK_EMPTY_MESSAGES)
+  const base = pickRandom(STOCK_MESSAGES)(n)
+  return lastPillDate ? `${base} Dernier comprimé : ${formatLongDate(lastPillDate)}.` : base
+}
+
+/** Fin d'ordonnance : `daysLeft` = jours restants (négatif si expirée). */
+export const getPrescriptionNotificationMessage = (daysLeft: number, endDate: string) => {
+  const when = formatLongDate(endDate)
+  if (daysLeft < 0) return `Ton ordonnance a expiré (le ${when}). Prends rendez-vous pour la renouveler avant de manquer de pilules. 📋`
+  if (daysLeft === 0) return `Ton ordonnance se termine aujourd'hui. Pense à la faire renouveler dès que possible. 📋`
+  if (daysLeft <= 3) return `Plus que ${daysLeft} jour${daysLeft > 1 ? "s" : ""} de validité pour ton ordonnance (jusqu'au ${when}). Prends rendez-vous maintenant. 📋`
+  if (daysLeft <= 7) return `Ton ordonnance se termine dans ${daysLeft} jours (le ${when}). C'est le moment de prendre rendez-vous. 📋`
+  return `Ton ordonnance se termine dans ${daysLeft} jours (le ${when}). Pense à prévoir son renouvellement. 📋`
+}
 export const getRestartNotificationMessage = () => pickRandom(RESTART_MESSAGES)
 export const getTestNotificationMessage = () => pickRandom(TEST_MESSAGES)
 

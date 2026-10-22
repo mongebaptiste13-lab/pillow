@@ -8,8 +8,10 @@ import {
 } from "@/lib/date"
 import { getPackStatus } from "@/lib/pack"
 import { findPill } from "@/lib/pill-data"
+import { STOCK_URGENT_DAYS, getPrescriptionInfo, getStockInfo } from "@/lib/supply"
 import {
   getNagNotificationMessage,
+  getPrescriptionNotificationMessage,
   getReminderNotificationMessage,
   getRestartNotificationMessage,
   getStockNotificationMessage,
@@ -24,8 +26,9 @@ import type { SupabaseClient } from "@supabase/supabase-js"
  *  1. rappel à l'heure de prise (si la pilule n'est pas encore prise, hors jour de pause)
  *  2. relances toutes les 30 min (3 max) tant que la pilule n'est pas prise
  *  3. rappels ponctuels programmés (« plus tard »)
- *  4. alerte de stock, une fois par jour à 9h
+ *  4. alerte de stock à 9h : une fois en passant sous le seuil, puis chaque jour dès 3 jours restants
  *  5. rappel de reprise de plaquette la veille à 18h (pilules 21/7)
+ *  6. fin d'ordonnance à 10h : une alerte par palier (30, 14, 7, 3 jours, dernier jour, expirée)
  *
  * Chaque envoi est « réservé » dans la base AVANT l'envoi (mise à jour conditionnelle) :
  * deux exécutions simultanées ne peuvent donc pas envoyer deux fois la même notification.
@@ -36,6 +39,7 @@ const MAX_NAGS = 3
 const REMINDER_WINDOW_MIN = 6 * 60
 const STOCK_ALERT_MINUTE = 9 * 60
 const RESTART_ALERT_MINUTE = 18 * 60
+const PRESCRIPTION_ALERT_MINUTE = 10 * 60
 const STALE_SCHEDULE_MS = 3 * 60 * 60_000
 
 export interface DispatchSummary {
@@ -46,6 +50,7 @@ export interface DispatchSummary {
   snoozes: number
   stock: number
   restart: number
+  prescription: number
   removedSubscriptions: number
   errors: string[]
 }
@@ -66,7 +71,7 @@ export async function runDispatch(now: Date = new Date(), deps: DispatchDeps = {
   const admin = deps.admin ?? createAdminClient()
   const send = deps.send ?? sendPushNotification
   const summary: DispatchSummary = {
-    users: 0, sent: 0, reminders: 0, nags: 0, snoozes: 0, stock: 0, restart: 0, removedSubscriptions: 0, errors: [],
+    users: 0, sent: 0, reminders: 0, nags: 0, snoozes: 0, stock: 0, restart: 0, prescription: 0, removedSubscriptions: 0, errors: [],
   }
   const nowIso = now.toISOString()
 
@@ -137,7 +142,7 @@ export async function runDispatch(now: Date = new Date(), deps: DispatchDeps = {
       .upsert(missingState.map((user_id) => ({ user_id })), { onConflict: "user_id", ignoreDuplicates: true })
     if (error) summary.errors.push(`state init: ${error.message}`)
     for (const user_id of missingState) {
-      states.set(user_id, { user_id, reminder_key: null, nag_count: 0, last_sent_at: null, stock_date: null, restart_date: null, updated_at: null })
+      states.set(user_id, { user_id, reminder_key: null, nag_count: 0, last_sent_at: null, stock_date: null, restart_date: null, stock_key: null, rx_key: null, updated_at: null })
     }
   }
 
@@ -254,24 +259,53 @@ export async function runDispatch(now: Date = new Date(), deps: DispatchDeps = {
       }
     }
 
-    /* Alerte de stock (une fois par jour, à 9h, tant que le stock est sous le seuil) */
+    /* Alerte de stock : une fois en passant sous le seuil, puis chaque jour quand il ne reste que quelques jours */
     const daysLeft = profile.days_remaining ?? 0
     const threshold = profile.stock_alert_days ?? 7
-    if (
-      profile.notif_stock &&
-      daysLeft <= threshold &&
-      minutes >= STOCK_ALERT_MINUTE &&
-      state.stock_date !== dateKey
-    ) {
-      const { data: claimed } = await admin
-        .from("notification_state")
-        .update({ stock_date: dateKey, updated_at: nowIso })
-        .eq("user_id", userId)
-        .or(`stock_date.is.null,stock_date.neq.${dateKey}`)
-        .select("user_id")
-      if (claimed && claimed.length > 0) {
-        state.stock_date = dateKey
-        if ((await sendToUser(userId, payload("stock", getStockNotificationMessage(daysLeft), "pillow-stock", "Pillow 🛒"))) > 0) summary.stock++
+    if (profile.notif_stock && daysLeft > threshold && state.stock_key) {
+      // Stock reconstitué : le prochain passage sous le seuil prévient de nouveau
+      await admin.from("notification_state").update({ stock_key: null, updated_at: nowIso }).eq("user_id", userId)
+      state.stock_key = null
+    }
+    if (profile.notif_stock && daysLeft <= threshold && minutes >= STOCK_ALERT_MINUTE) {
+      const stockKey = daysLeft <= STOCK_URGENT_DAYS ? `d|${dateKey}` : `t|${threshold}`
+      if (state.stock_key !== stockKey) {
+        const { data: claimed } = await admin
+          .from("notification_state")
+          .update({ stock_key: stockKey, updated_at: nowIso })
+          .eq("user_id", userId)
+          .or(`stock_key.is.null,stock_key.neq.${stockKey}`)
+          .select("user_id")
+        if (claimed && claimed.length > 0) {
+          state.stock_key = stockKey
+          const stock = getStockInfo({
+            pillType, packStartDate: profile.pack_start_date, perBox: findPill(profile.pill_name)?.daysPerBox ?? 21,
+            daysLeft, todayKey: dateKey, takenToday,
+          })
+          const body = getStockNotificationMessage(daysLeft, stock.lastPillDate)
+          if ((await sendToUser(userId, payload("stock", body, "pillow-stock", "Pillow 🛒"))) > 0) summary.stock++
+        }
+      }
+    }
+
+    /* Fin d'ordonnance : une alerte par palier */
+    if (profile.notif_prescription && profile.prescription_end_date && minutes >= PRESCRIPTION_ALERT_MINUTE) {
+      const rx = getPrescriptionInfo(profile.prescription_end_date, dateKey)
+      if (rx.bucket !== null && rx.daysLeft !== null) {
+        const rxKey = `${profile.prescription_end_date}|${rx.bucket}`
+        if (state.rx_key !== rxKey) {
+          const { data: claimed } = await admin
+            .from("notification_state")
+            .update({ rx_key: rxKey, updated_at: nowIso })
+            .eq("user_id", userId)
+            .or(`rx_key.is.null,rx_key.neq.${rxKey}`)
+            .select("user_id")
+          if (claimed && claimed.length > 0) {
+            state.rx_key = rxKey
+            const body = getPrescriptionNotificationMessage(rx.daysLeft, profile.prescription_end_date)
+            if ((await sendToUser(userId, payload("prescription", body, "pillow-prescription", "Pillow 📋"))) > 0) summary.prescription++
+          }
+        }
       }
     }
 

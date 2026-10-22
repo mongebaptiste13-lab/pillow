@@ -264,7 +264,8 @@ export default function SettingsTab({ data, profile, pillInfo, push, userId }: T
 
         <ToggleRow label="Rappel à l'heure de prise" hint="Une notification chaque jour de prise" checked={profile.notif_reminder} onChange={(v) => void data.updateProfile({ notif_reminder: v })} />
         <ToggleRow label="Relances si oubli" hint="Jusqu'à 3 relances, toutes les 30 min" checked={profile.notif_nag} onChange={(v) => void data.updateProfile({ notif_nag: v })} disabled={!profile.notif_reminder} />
-        <ToggleRow label="Alerte de stock" hint={`Chaque matin à 9 h sous ${profile.stock_alert_days ?? 7} jours restants`} checked={profile.notif_stock} onChange={(v) => void data.updateProfile({ notif_stock: v })} />
+        <ToggleRow label="Alerte de stock" hint={`À 9 h : une fois sous ${profile.stock_alert_days ?? 7} jours restants, puis chaque jour dès 3 jours`} checked={profile.notif_stock} onChange={(v) => void data.updateProfile({ notif_stock: v })} />
+        <ToggleRow label="Fin d'ordonnance" hint="À 10 h : 30, 14, 7, 3 jours avant, puis le dernier jour" checked={profile.notif_prescription} onChange={(v) => void data.updateProfile({ notif_prescription: v })} />
         {pillInfo?.pillType !== "28_continu" && (
           <ToggleRow label="Reprise de plaquette" hint="La veille à 18 h, à la fin de la pause" checked={profile.notif_restart} onChange={(v) => void data.updateProfile({ notif_restart: v })} />
         )}
