@@ -21,7 +21,7 @@ const TIME_PRESETS = ["07:00", "08:00", "09:00", "12:00", "20:00", "21:00", "22:
 
 function StepIcon({ children }: { children: React.ReactNode }) {
   return (
-    <div className="mx-auto mb-4 grid size-14 place-items-center rounded-2xl bg-gradient-to-br from-gold-soft to-card text-primary shadow-sm ring-1 ring-gold/40">
+    <div className="mx-auto mb-4 grid size-14 place-items-center rounded-2xl bg-gradient-to-br from-gold-soft to-card text-primary shadow-sm ring-1 ring-primary/40">
       {children}
     </div>
   )
@@ -139,11 +139,11 @@ export default function Onboarding({ userId, onComplete }: { userId: string; onC
             <span className="font-display text-sm font-semibold text-foreground">Pillow</span>
           </div>
           <div className="h-1.5 overflow-hidden rounded-full bg-muted" role="progressbar" aria-valuemin={1} aria-valuemax={steps.length} aria-valuenow={index + 1}>
-            <div className="h-full rounded-full bg-gradient-to-r from-primary to-gold transition-all duration-500" style={{ width: `${((index + 1) / steps.length) * 100}%` }} />
+            <div className="h-full rounded-full bg-primary transition-all duration-500" style={{ width: `${((index + 1) / steps.length) * 100}%` }} />
           </div>
         </div>
 
-        <div key={step} className="surface-lux animate-fade-up rounded-3xl p-6">
+        <div key={step} className="surface-lux animate-fade-up rounded-2xl p-6">
           {/* 1 — Prénom */}
           {step === "name" && (
             <div className="space-y-6">
@@ -416,7 +416,7 @@ export default function Onboarding({ userId, onComplete }: { userId: string; onC
             ) : (
               <Button type="button" variant="lux" size="lg" onClick={handleFinish} disabled={saving} className="flex-1">
                 {saving && <PillSpinner className="size-5" />}
-                {saving ? "Un instant…" : push.status === "subscribed" ? "C'est parti ✨" : "Terminer"}
+                {saving ? "Un instant…" : push.status === "subscribed" ? "C'est parti" : "Terminer"}
               </Button>
             )}
           </div>

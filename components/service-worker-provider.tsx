@@ -1,6 +1,7 @@
 'use client'
 
 import { useEffect } from 'react'
+import { playReminderSound } from '@/lib/sound'
 
 /**
  * Enregistre le service worker (hors-ligne + notifications push).
@@ -46,6 +47,16 @@ export function ServiceWorkerProvider() {
       navigator.serviceWorker.addEventListener('controllerchange', onControllerChange)
     }
     return () => navigator.serviceWorker.removeEventListener('controllerchange', onControllerChange)
+  }, [])
+
+  // Rappel reçu pendant que l'app est ouverte : on joue le son choisi dans les réglages
+  useEffect(() => {
+    if (!('serviceWorker' in navigator)) return
+    const onMessage = (event: MessageEvent) => {
+      if (event.data?.type === 'PILLOW_PUSH') void playReminderSound()
+    }
+    navigator.serviceWorker.addEventListener('message', onMessage)
+    return () => navigator.serviceWorker.removeEventListener('message', onMessage)
   }, [])
 
   return null

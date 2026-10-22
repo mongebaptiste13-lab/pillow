@@ -247,7 +247,7 @@ export default function Dashboard({ userId, onNeedsOnboarding }: { userId: strin
 
   return (
     <div className="mx-auto flex min-h-dvh max-w-md flex-col">
-      <header className="sticky top-0 z-20 border-b border-border/60 bg-background/80 px-5 pb-3 pt-safe backdrop-blur-xl">
+      <header className="sticky top-0 z-20 border-b border-border/60 bg-background px-5 pb-3 pt-safe ">
         <div className="flex items-center justify-between pt-3">
           <Logo size={34} />
           <div className="flex items-center gap-2">
@@ -287,7 +287,7 @@ export default function Dashboard({ userId, onNeedsOnboarding }: { userId: strin
 
       <nav aria-label="Navigation principale" className="fixed inset-x-0 bottom-0 z-30">
         <div className="mx-auto max-w-md px-4 pb-safe">
-          <div className="surface-lux mb-3 grid grid-cols-4 rounded-3xl bg-card/90 p-1.5 backdrop-blur-xl">
+          <div className="surface-lux mb-3 grid grid-cols-4 rounded-2xl p-1.5 ">
             {TABS.map(({ id, label, icon: Icon }) => {
               const active = tab === id
               return (
@@ -306,7 +306,7 @@ export default function Dashboard({ userId, onNeedsOnboarding }: { userId: strin
                 >
                   <Icon className={cn("size-5 transition-transform", active && "scale-110")} strokeWidth={active ? 2.3 : 1.9} />
                   {label}
-                  {active && <span className="absolute -bottom-0.5 h-0.5 w-5 rounded-full bg-gold" />}
+                  {active && <span className="absolute -bottom-0.5 h-0.5 w-5 rounded-full bg-primary" />}
                 </button>
               )
             })}

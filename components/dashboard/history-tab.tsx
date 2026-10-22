@@ -83,7 +83,7 @@ export default function HistoryTab({ data, profile, todayKey, pillType, stats, t
         ))}
       </div>
 
-      <section className="surface-lux rounded-3xl p-4" aria-label="Calendrier des prises">
+      <section className="surface-lux rounded-2xl p-4" aria-label="Calendrier des prises">
         <div className="mb-3 flex items-center justify-between">
           <Button variant="ghost" size="icon" onClick={() => shiftMonth(-1)} aria-label="Mois précédent">
             <ChevronLeft />
@@ -121,13 +121,13 @@ export default function HistoryTab({ data, profile, todayKey, pillType, stats, t
                 aria-pressed={isSelected}
                 className={cn(
                   "relative grid aspect-square place-items-center rounded-full text-sm font-medium transition-all",
-                  status === "taken" && "bg-gradient-to-br from-primary to-[oklch(0.45_0.15_352)] text-primary-foreground shadow-sm",
+                  status === "taken" && "bg-primary text-primary-foreground shadow-sm",
                   status === "missed" && "bg-destructive/12 text-destructive ring-1 ring-destructive/30",
                   status === "pause" && "bg-muted text-muted-foreground",
                   status === "pending" && "bg-card text-foreground ring-1 ring-primary/40",
                   status === "future" && "text-foreground/30",
                   status === "untracked" && "text-foreground/40 hover:bg-muted",
-                  isToday && "ring-2 ring-gold ring-offset-2 ring-offset-card",
+                  isToday && "ring-2 ring-primary ring-offset-2 ring-offset-card",
                   isSelected && "scale-110 ring-2 ring-foreground/70 ring-offset-2 ring-offset-card",
                   interactive && "active:scale-95",
                 )}

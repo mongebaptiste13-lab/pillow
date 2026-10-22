@@ -10,60 +10,123 @@ export const ICON = "/icons/icon-192.png"
 export const BADGE = "/icons/badge-96.png"
 
 export const TAKEN_MESSAGES = [
-  "Pilule validée. Ton ovaire vient de lever les yeux au ciel. 💊",
+  "Pilule validée. Ton ovaire vient de lever les yeux au ciel.",
   "C'est noté. Une petite victoire hormonale de plus.",
-  "Bien joué, mission pilule accomplie sans drame. ✅",
-  "Pilule prise. Le chaos est repoussé pour aujourd'hui.",
-  "Check ! Ton futur toi te remercie. 🎉",
+  "Mission pilule accomplie, sans drame.",
+  "Pilule prise. Le chaos est repoussé d'un jour.",
+  "Check ! Ton futur toi te remercie.",
+  "Et hop, c'est fait. Tu peux reprendre une vie normale.",
+  "Bravo, tu es plus fiable que ton réveil.",
+  "Prise enregistrée. On ne s'applaudit pas, mais presque.",
+  "Validé. Ton calendrier est content.",
+  "Pilule avalée, cerveau tranquille.",
+  "Un jour de plus dans la boîte. Littéralement.",
+  "Parfait. Rendez-vous demain, même heure, même énergie.",
 ]
 
 export const REMINDER_MESSAGES = [
-  "Petit rappel tout doux : c'est l'heure de ta pilule.",
-  "Ping pilule : ton coussin pense à toi. 🛏️",
-  "Alerte chic et hormonale : c'est l'heure de la pilule.",
-  "Rappel amical : la pilule n'aime pas être ghostée.",
-  "C'est l'heure ! Ta pilule t'attend sagement. 💊",
+  "C'est l'heure de ta pilule. Elle fait la queue depuis ce matin.",
+  "Ping pilule : ton coussin pense à toi.",
+  "La pilule n'aime pas être ghostée. Réponds-lui.",
+  "Ding ! Ta pilule t'attend sagement.",
+  "Petit rappel tout doux : c'est le moment. Pas demain, maintenant.",
+  "Ta pilule m'a demandé de te dire bonjour.",
+  "Alerte hormones : une pilule en attente de validation.",
+  "Tu as un rendez-vous avec un comprimé. Ne le fais pas attendre.",
+  "Hello, c'est ta pilule. On se voit à l'heure habituelle ?",
+  "Mission du jour, niveau facile : avaler un petit comprimé.",
+  "Ta routine préférée t'appelle. Décroche.",
+  "Il est l'heure. Même un verre d'eau suffit, pas besoin de cérémonie.",
+  "Un geste, un verre d'eau, et on n'en parle plus.",
+  "Ta pilule dit que c'est elle qui t'invite aujourd'hui.",
+  "Rappel officiel du Ministère du Coussin : pilule, maintenant.",
+  "Pas de panique, juste une pilule. Tu gères.",
+  "Si tu lis ça, c'est que ta pilule est jalouse de ton téléphone.",
+  "Moment pilule. Tu as 10 secondes, tu peux le faire.",
+  "Ton futur toi demande poliment que tu prennes ta pilule.",
+  "Dring dring. C'est la pilule, elle est à l'heure, elle.",
 ]
 
 export const NAG_MESSAGES = [
-  "Toujours pas de pilule enregistrée aujourd'hui. On la prend maintenant ? 💊",
+  "Toujours pas de pilule enregistrée aujourd'hui. On la prend maintenant ?",
   "Je reviens à la charge, avec tendresse : ta pilule t'attend.",
-  "Plus tu la prends tôt, mieux c'est. Elle est où, cette pilule ? 🔔",
+  "Elle est où, cette pilule ? Je commence à m'inquiéter.",
   "Petit rappel insistant mais bienveillant : pilule du jour à valider.",
+  "Ta pilule me demande de tes nouvelles. Elle boude un peu.",
+  "Toujours là, toujours aussi charmant : pilule ?",
+  "Je ne lâche pas l'affaire. Pilule, s'il te plaît.",
+  "Ceci est un rappel du rappel. Oui, c'est le même sujet.",
+  "Ton téléphone a vibré pour rien tout à l'heure. Rattrape-le avec ta pilule.",
+  "Allez, deux secondes et on n'en parle plus. Pilule.",
+  "Ta pilule est toujours dans sa boîte, seule et triste.",
+  "Je peux faire ça toute la journée. Pas toi. Pilule.",
+  "Plus tôt tu la prends, plus vite je te laisse tranquille.",
+  "Coucou, c'est encore moi. La pilule, tu sais.",
+  "Petite voix dans ton téléphone : et si on la prenait, cette pilule ?",
 ]
 
 export const SNOOZE_REMINDER_MESSAGES = [
-  "On m'avait demandé de te relancer : c'est l'heure de ta pilule. ⏰",
-  "Je reviens comme promis. Ta pilule, maintenant ? 💊",
-  "Le délai est écoulé : pilule du jour, c'est le moment.",
+  "Comme promis, je reviens : c'est l'heure de ta pilule.",
+  "Le délai est écoulé. Ta pilule aussi s'impatiente.",
+  "Je t'avais dit que je repasserais. Pilule, maintenant ?",
+  "Retour de la pause : ta pilule est toujours là.",
+  "C'est reparti pour un tour. Cette fois, on la prend ?",
+  "Tu m'as demandé de te relancer, je tiens mes promesses.",
+  "Top chrono : plus de report possible. Pilule.",
+  "Ton « plus tard » est arrivé. Il a apporté ta pilule.",
 ]
 
 export const SNOOZE_MESSAGES = [
-  "Ok, je te relance plus tard. Je note ça dans mon coussin mental.",
-  "Très bien, report validé. Je reviens te chercher. ⏰",
-  "Pas de souci, je remets ça dans un coin moelleux.",
+  "Ok, je te relance plus tard.",
+  "Très bien, report validé. Je reviens te chercher.",
+  "Pas de souci, je garde ça au chaud.",
   "Compris. Je repasse plus tard avec tact et insistance.",
+  "Noté. Je mets un post-it mental.",
+  "D'accord, mais je n'oublie pas. Je ne suis pas ton ex.",
+  "Report accepté. Pas de deuxième chance gratuite, par contre.",
+  "Ça roule. À tout à l'heure, comprimé en main.",
 ]
 
 export const STOCK_MESSAGES = [
-  (n: number) => `Il te reste ${n} jour${n > 1 ? "s" : ""} de pilule. C'est le bon moment pour refaire le stock. 🛒`,
-  (n: number) => `Stock pilule : ${n} jour${n > 1 ? "s" : ""} restant${n > 1 ? "s" : ""}. Future toi te remercie d'anticiper.`,
-  (n: number) => `Alerte shopping utile : plus que ${n} jour${n > 1 ? "s" : ""} avant la panne de pilule. 📦`,
+  (n: number) => `Il te reste ${n} jour${n > 1 ? "s" : ""} de pilule. C'est le bon moment pour refaire le stock.`,
+  (n: number) => `Stock pilule : ${n} jour${n > 1 ? "s" : ""} restant${n > 1 ? "s" : ""}. Ton futur toi te remercie d'anticiper.`,
+  (n: number) => `Plus que ${n} jour${n > 1 ? "s" : ""} avant la panne sèche. La pharmacie, c'est pas loin.`,
+  (n: number) => `${n} jour${n > 1 ? "s" : ""} de pilule en réserve. Ça se rachète avant la rupture, pas pendant.`,
+  (n: number) => `Ta boîte fond comme neige au soleil : ${n} jour${n > 1 ? "s" : ""} restant${n > 1 ? "s" : ""}.`,
+  (n: number) => `Rappel logistique : il te reste ${n} jour${n > 1 ? "s" : ""}. Passe à la pharmacie quand tu peux.`,
+  (n: number) => `Compte à rebours : ${n} jour${n > 1 ? "s" : ""} de pilule. Anticipe, tu verras, c'est reposant.`,
+  (n: number) => `Il est temps de racheter ta pilule (${n} jour${n > 1 ? "s" : ""} restant${n > 1 ? "s" : ""}). La pharmacie t'attend.`,
 ]
 
 export const STOCK_EMPTY_MESSAGES = [
-  "Ton stock de pilules est épuisé. Pense à passer à la pharmacie aujourd'hui. 🏥",
-  "Plus de pilules en stock ! Un tour à la pharmacie s'impose. 📦",
+  "Ton stock de pilules est épuisé. Pharmacie, aujourd'hui.",
+  "Plus de pilules en stock ! Un tour à la pharmacie s'impose.",
+  "Boîte vide. Direction la pharmacie, sans détour.",
+  "Alerte rouge : plus aucune pilule en réserve.",
+  "Fin de stock. Si tu as une ordonnance valide, c'est le moment d'y aller.",
+  "Ton stock est à zéro. Ça ne se rachète pas tout seul.",
 ]
 
 export const RESTART_MESSAGES = [
-  "Demain on reprend la pilule : la pause touche à sa fin. 🔄",
-  "Petit rappel moelleux : nouvelle plaquette à démarrer demain. ✨",
-  "Fin de pause imminente : prépare ta nouvelle plaquette pour demain 💪",
+  "Demain on reprend la pilule : la pause touche à sa fin.",
+  "Fin de pause demain. Sors la nouvelle plaquette.",
+  "Dernier jour de pause. Demain, c'est reparti.",
+  "Petit rappel : nouvelle plaquette à démarrer demain.",
+  "Les vacances sont finies : on reprend demain matin.",
+  "Prépare ta plaquette, la pause se termine ce soir.",
+  "Demain, jour 1. Pas d'excuse, tout est prêt.",
+  "Ta pause arrive au bout. Demain, on est de retour.",
+]
+
+export const PRESCRIPTION_SOON_MESSAGES = [
+  (days: number, when: string) => `Ton ordonnance se termine dans ${days} jours (le ${when}). Pense à prévoir son renouvellement.`,
+  (days: number, when: string) => `Ordonnance : encore ${days} jours (jusqu'au ${when}). Un rendez-vous, ça se prend à l'avance.`,
+  (days: number, when: string) => `Ton ordonnance expire le ${when}, dans ${days} jours. Mieux vaut ne pas attendre le dernier moment.`,
+  (days: number, when: string) => `Il reste ${days} jours de validité à ton ordonnance (fin le ${when}). Un petit coup de fil au cabinet ?`,
 ]
 
 export const TEST_MESSAGES = [
-  "Ça marche ! Tu recevras tes rappels ici, même quand l'app est fermée. ✨",
+  "Ça marche ! Tu recevras tes rappels ici, même quand l'app est fermée.",
 ]
 
 function pickRandom<T>(items: T[]): T {
@@ -84,11 +147,11 @@ export const getStockNotificationMessage = (n: number, lastPillDate?: string | n
 /** Fin d'ordonnance : `daysLeft` = jours restants (négatif si expirée). */
 export const getPrescriptionNotificationMessage = (daysLeft: number, endDate: string) => {
   const when = formatLongDate(endDate)
-  if (daysLeft < 0) return `Ton ordonnance a expiré (le ${when}). Prends rendez-vous pour la renouveler avant de manquer de pilules. 📋`
-  if (daysLeft === 0) return `Ton ordonnance se termine aujourd'hui. Pense à la faire renouveler dès que possible. 📋`
-  if (daysLeft <= 3) return `Plus que ${daysLeft} jour${daysLeft > 1 ? "s" : ""} de validité pour ton ordonnance (jusqu'au ${when}). Prends rendez-vous maintenant. 📋`
-  if (daysLeft <= 7) return `Ton ordonnance se termine dans ${daysLeft} jours (le ${when}). C'est le moment de prendre rendez-vous. 📋`
-  return `Ton ordonnance se termine dans ${daysLeft} jours (le ${when}). Pense à prévoir son renouvellement. 📋`
+  if (daysLeft < 0) return `Ton ordonnance a expiré (le ${when}). Prends rendez-vous pour la renouveler avant de manquer de pilules.`
+  if (daysLeft === 0) return "Ton ordonnance se termine aujourd'hui. Pense à la faire renouveler dès que possible."
+  if (daysLeft <= 3) return `Plus que ${daysLeft} jour${daysLeft > 1 ? "s" : ""} de validité pour ton ordonnance (jusqu'au ${when}). Prends rendez-vous maintenant.`
+  if (daysLeft <= 7) return `Ton ordonnance se termine dans ${daysLeft} jours (le ${when}). C'est le moment de prendre rendez-vous.`
+  return pickRandom(PRESCRIPTION_SOON_MESSAGES)(daysLeft, when)
 }
 export const getRestartNotificationMessage = () => pickRandom(RESTART_MESSAGES)
 export const getTestNotificationMessage = () => pickRandom(TEST_MESSAGES)

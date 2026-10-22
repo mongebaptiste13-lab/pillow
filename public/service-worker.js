@@ -3,7 +3,7 @@
  *         (2) permettre l'usage hors-ligne de l'interface.
  * Les appels /api et Supabase ne sont JAMAIS mis en cache.
  */
-const VERSION = 'pillow-v4'
+const VERSION = 'pillow-v5'
 const STATIC_CACHE = `${VERSION}-static`
 const PAGES_CACHE = `${VERSION}-pages`
 const PRECACHE = ['/', '/offline.html', '/manifest.json', '/icons/icon-192.png', '/icons/icon-512.png']
@@ -125,7 +125,19 @@ self.addEventListener('push', (event) => {
     timestamp: Date.now(),
   }
 
-  event.waitUntil(self.registration.showNotification(title, options))
+  const ringing = kind === 'reminder' || kind === 'nag' || kind === 'snooze'
+  if (ringing) options.vibrate = [220, 110, 220, 110, 420]
+
+  event.waitUntil(
+    (async () => {
+      await self.registration.showNotification(title, options)
+      // App ouverte : la page joue le son choisi dans les réglages
+      if (ringing) {
+        const windows = await self.clients.matchAll({ type: 'window', includeUncontrolled: true })
+        windows.forEach((client) => client.postMessage({ type: 'PILLOW_PUSH', kind }))
+      }
+    })(),
+  )
 })
 
 self.addEventListener('notificationclick', (event) => {

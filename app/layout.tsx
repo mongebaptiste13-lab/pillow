@@ -1,9 +1,5 @@
 import type { Metadata, Viewport } from 'next'
 import { GeistSans } from 'geist/font/sans'
-import '@fontsource/cormorant-garamond/latin-500.css'
-import '@fontsource/cormorant-garamond/latin-600.css'
-import '@fontsource/cormorant-garamond/latin-700.css'
-import '@fontsource/cormorant-garamond/latin-600-italic.css'
 import { ThemeProvider } from '@/components/theme-provider'
 import { ServiceWorkerProvider } from '@/components/service-worker-provider'
 import { Toaster } from '@/components/ui/sonner'
@@ -14,8 +10,8 @@ export const viewport: Viewport = {
   initialScale: 1,
   viewportFit: 'cover',
   themeColor: [
-    { media: '(prefers-color-scheme: light)', color: '#faf6f2' },
-    { media: '(prefers-color-scheme: dark)', color: '#150e14' },
+    { media: '(prefers-color-scheme: light)', color: '#fbfaf8' },
+    { media: '(prefers-color-scheme: dark)', color: '#121010' },
   ],
 }
 
