@@ -1,9 +1,19 @@
-# Pillow 💊
+# Pillow – Pill Reminder PWA
 
-Ton rappel de pilule, élégant et fiable. Application web installable (PWA) en français :
-rappels push même app fermée, suivi des prises, plaquette 21/7, gestion du stock, historique et statistiques.
+Installable web app (PWA) that reminds users to take their daily pill, even when the app is closed. Tracks intakes, handles the 21/7 pack cycle, manages stock and prescriptions, and shows history and statistics. Interface in French.
 
-**Stack :** Next.js 16 · React 19 · Tailwind 4 · Supabase (Auth, Postgres, Realtime) · Web Push (VAPID)
+## Features
+
+- Server-side web push reminders (on time, up to 3 follow-ups every 30 min, "later" reminders)
+- Intake tracking with history and statistics
+- 21/7 pack cycle and pause handling, with a reminder the evening before resuming
+- Stock management (boxes, packs, spare packs) with low-stock alerts
+- Prescription expiry reminders (30, 14, 7 and 3 days before)
+- Per-user time zone, de-duplicated notifications, account deletion
+
+## Stack
+
+Next.js 16 · React 19 · TypeScript · Tailwind CSS 4 · Supabase (Auth, Postgres, Realtime) · Web Push (VAPID) · Netlify scheduled functions · Unit tests (notification dispatcher and business logic)
 
 ## Démarrage
 
