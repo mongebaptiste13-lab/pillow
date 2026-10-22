@@ -45,6 +45,7 @@ export const REMINDER_MESSAGES = [
   "Moment pilule. Tu as 10 secondes, tu peux le faire.",
   "Ton futur toi demande poliment que tu prennes ta pilule.",
   "Dring dring. C'est la pilule, elle est à l'heure, elle.",
+  "WHY DON'T YOU LOVE MEEEEEE !",
 ]
 
 export const NAG_MESSAGES = [
