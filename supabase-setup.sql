@@ -13,6 +13,7 @@ create table if not exists public.profiles (
   pill_name         text,
   pill_time         text,
   boxes_remaining   integer     default 1,
+  packs_per_box     integer     default 3,
   days_remaining    integer     default 21,
   stock_alert_days  integer     default 7,
   created_at        timestamptz default now(),
@@ -22,6 +23,7 @@ create table if not exists public.profiles (
 alter table public.profiles add column if not exists pill_name        text;
 alter table public.profiles add column if not exists pill_time        text;
 alter table public.profiles add column if not exists boxes_remaining  integer default 1;
+alter table public.profiles add column if not exists packs_per_box    integer default 3;
 alter table public.profiles add column if not exists days_remaining   integer default 21;
 alter table public.profiles add column if not exists stock_alert_days integer default 7;
 -- Nouveautés v2

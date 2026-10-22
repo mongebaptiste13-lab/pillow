@@ -54,7 +54,9 @@ export default function Onboarding({ userId, onComplete }: { userId: string; onC
   const [packState, setPackState] = useState<PackState>("new")
   const [packDay, setPackDay] = useState(1)
   const [pauseDay, setPauseDay] = useState(1)
-  const [reserveBoxes, setReserveBoxes] = useState(1)
+  const [packsPerBox, setPacksPerBox] = useState(3)
+  const [openBoxPacks, setOpenBoxPacks] = useState(0)
+  const [closedBoxes, setClosedBoxes] = useState(0)
   const [rxEnd, setRxEnd] = useState("")
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -79,7 +81,8 @@ export default function Onboarding({ userId, onComplete }: { userId: string; onC
     return Math.max(0, perBox - (day - 1))
   }, [packState, packDay, perBox])
 
-  const daysRemaining = remainingInCurrentPack + reserveBoxes * perBox
+  const reservePacks = openBoxPacks + closedBoxes * packsPerBox
+  const daysRemaining = remainingInCurrentPack + reservePacks * perBox
 
   const packStartDate = useMemo(() => {
     const today = localDateKey()
@@ -109,7 +112,8 @@ export default function Onboarding({ userId, onComplete }: { userId: string; onC
       name: name.trim(),
       pill_name: pill.name,
       pill_time: pillTime,
-      boxes_remaining: reserveBoxes,
+      boxes_remaining: closedBoxes,
+      packs_per_box: packsPerBox,
       days_remaining: daysRemaining,
       stock_alert_days: 7,
       timezone: detectTimezone(),
@@ -217,7 +221,7 @@ export default function Onboarding({ userId, onComplete }: { userId: string; onC
               </div>
               {pill && (
                 <div className="flex flex-wrap gap-1.5">
-                  <span className="rounded-full bg-primary/10 px-2.5 py-1 text-xs font-medium text-primary">{pill.daysPerBox} comprimés / boîte</span>
+                  <span className="rounded-full bg-primary/10 px-2.5 py-1 text-xs font-medium text-primary">{pill.daysPerBox} comprimés / plaquette</span>
                   <span className="rounded-full bg-secondary px-2.5 py-1 text-xs text-secondary-foreground">
                     {pill.pillType === "28_continu" ? "Prise continue" : "21 jours + 7 de pause"}
                   </span>
@@ -327,11 +331,34 @@ export default function Onboarding({ userId, onComplete }: { userId: string; onC
               <div className="text-center">
                 <StepIcon><Package className="size-6" /></StepIcon>
                 <h2 className="font-display text-3xl font-semibold">Ton stock</h2>
-                <p className="mt-1 text-sm text-muted-foreground">
-                  Combien de boîtes de réserve as-tu, <strong className="font-semibold">sans compter celle en cours</strong> ?
-                </p>
+                <p className="mt-1 text-sm text-muted-foreground">Dis-moi ce qu'il te reste, sans compter la plaquette en cours.</p>
               </div>
-              <Stepper value={reserveBoxes} onChange={setReserveBoxes} min={0} max={24} label="Boîtes de réserve" />
+
+              <div className="space-y-4">
+                <div className="space-y-2 text-center">
+                  <p className="text-sm font-medium">Plaquettes dans une boîte</p>
+                  <Stepper
+                    value={packsPerBox}
+                    onChange={(n) => {
+                      setPacksPerBox(n)
+                      setOpenBoxPacks((o) => Math.min(o, n - 1))
+                    }}
+                    min={1}
+                    max={12}
+                    label="Plaquettes par boîte"
+                  />
+                </div>
+                {packsPerBox > 1 && (
+                  <div className="space-y-2 text-center">
+                    <p className="text-sm font-medium">Plaquettes d'avance dans la boîte entamée</p>
+                    <Stepper value={openBoxPacks} onChange={setOpenBoxPacks} min={0} max={packsPerBox - 1} label="Plaquettes d'avance dans la boîte entamée" />
+                  </div>
+                )}
+                <div className="space-y-2 text-center">
+                  <p className="text-sm font-medium">Boîtes fermées</p>
+                  <Stepper value={closedBoxes} onChange={setClosedBoxes} min={0} max={24} label="Boîtes fermées" />
+                </div>
+              </div>
               <div className="rounded-2xl bg-muted/60 p-3 text-center text-sm">
                 <span className="font-display text-2xl font-semibold text-primary">{daysRemaining}</span>{" "}
                 <span className="text-muted-foreground">jour{daysRemaining > 1 ? "s" : ""} de pilule en tout</span>

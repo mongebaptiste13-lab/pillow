@@ -42,7 +42,8 @@ function MiniStepper({ value, onChange, min, max, label, unit }: { value: number
 const plural = (n: number, one: string, many = `${one}s`) => `${n} ${n > 1 ? many : one}`
 
 export default function PackTab({ data, profile, todayKey, pillType, pack, pillInfo, trackingSince }: TabCommon) {
-  const [boxes, setBoxes] = useState(1)
+  const [restockCount, setRestockCount] = useState(1)
+  const [restockUnit, setRestockUnit] = useState<"boxes" | "packs">("boxes")
 
   /* correction de la progression */
   const [editing, setEditing] = useState(false)
@@ -57,6 +58,7 @@ export default function PackTab({ data, profile, todayKey, pillType, pack, pillI
   useEffect(() => setRxDate(profile.prescription_end_date ?? ""), [profile.prescription_end_date])
 
   const perBox = pillInfo?.daysPerBox ?? 21
+  const packsPerBox = Math.max(1, profile.packs_per_box ?? 3)
   const daysLeft = profile.days_remaining ?? 0
   const alertAt = profile.stock_alert_days ?? 7
   const takenToday = data.logs[todayKey]?.taken === true
@@ -68,8 +70,8 @@ export default function PackTab({ data, profile, todayKey, pillType, pack, pillI
   )
 
   const stock = useMemo(
-    () => getStockInfo({ pillType, packStartDate: profile.pack_start_date, perBox, daysLeft, todayKey, takenToday }),
-    [pillType, profile.pack_start_date, perBox, daysLeft, todayKey, takenToday],
+    () => getStockInfo({ pillType, packStartDate: profile.pack_start_date, perBox, packsPerBox, daysLeft, todayKey, takenToday }),
+    [pillType, profile.pack_start_date, perBox, packsPerBox, daysLeft, todayKey, takenToday],
   )
   const stockLevel = getStockLevel(daysLeft, alertAt)
   const rx = useMemo(() => getPrescriptionInfo(profile.prescription_end_date, todayKey), [profile.prescription_end_date, todayKey])
@@ -276,20 +278,29 @@ export default function PackTab({ data, profile, todayKey, pillType, pack, pillI
           </div>
         </div>
 
-        {/* Décomposition en plaquettes / boîtes */}
-        <div className="mt-4 grid grid-cols-2 gap-2 text-center">
+        {/* Décomposition : plaquette en cours / plaquettes d'avance / boîtes fermées */}
+        <div className="mt-4 grid grid-cols-3 gap-2 text-center">
           <div className="rounded-2xl bg-muted/60 p-3">
             <p className="font-display text-2xl font-semibold leading-none" data-testid="stock-current">{stock.currentPackLeft}</p>
-            <p className="mt-1 text-[11px] text-muted-foreground">comprimé{stock.currentPackLeft > 1 ? "s" : ""} dans la plaquette en cours</p>
+            <p className="mt-1 text-[11px] leading-tight text-muted-foreground">comprimé{stock.currentPackLeft > 1 ? "s" : ""} dans la plaquette en cours</p>
           </div>
           <div className="rounded-2xl bg-muted/60 p-3">
             <p className="font-display text-2xl font-semibold leading-none" data-testid="stock-reserve">
-              {stock.reserveBoxes}
+              {stock.reservePacks}
               {stock.looseDays > 0 && <span className="text-sm font-normal text-muted-foreground"> + {stock.looseDays} j</span>}
             </p>
-            <p className="mt-1 text-[11px] text-muted-foreground">boîte{stock.reserveBoxes > 1 ? "s" : ""} en réserve</p>
+            <p className="mt-1 text-[11px] leading-tight text-muted-foreground">plaquette{stock.reservePacks > 1 ? "s" : ""} d'avance</p>
+          </div>
+          <div className="rounded-2xl bg-muted/60 p-3">
+            <p className="font-display text-2xl font-semibold leading-none" data-testid="stock-closed">{stock.closedBoxes}</p>
+            <p className="mt-1 text-[11px] leading-tight text-muted-foreground">boîte{stock.closedBoxes > 1 ? "s" : ""} fermée{stock.closedBoxes > 1 ? "s" : ""}</p>
           </div>
         </div>
+        {packsPerBox > 1 && (
+          <p className="mt-2 text-center text-xs text-muted-foreground" data-testid="stock-open-box">
+            Dans la boîte entamée : {stock.openBoxPacks === 0 ? "plus de plaquette d'avance" : `${plural(stock.openBoxPacks, "plaquette")} d'avance`}
+          </p>
+        )}
 
         {stock.lastPillDate ? (
           <p className={cn("mt-3 flex items-center gap-2 rounded-xl px-3 py-2 text-sm", stockLevel === "ok" ? "bg-muted/60" : "bg-destructive/10")}>
@@ -306,19 +317,46 @@ export default function PackTab({ data, profile, todayKey, pillType, pack, pillI
 
         <div className="hairline my-4" />
 
-        <p className="mb-2 text-sm font-medium">J'ai racheté des boîtes</p>
+        <p className="mb-2 text-sm font-medium">J'ai racheté…</p>
+        <div className="mb-3 grid grid-cols-2 gap-1 rounded-full bg-muted/60 p-1 text-sm" role="tablist" aria-label="Unité de rachat">
+          {([["boxes", "des boîtes"], ["packs", "des plaquettes"]] as const).map(([id, label]) => (
+            <button
+              key={id}
+              type="button"
+              role="tab"
+              aria-selected={restockUnit === id}
+              onClick={() => setRestockUnit(id)}
+              className={cn("rounded-full py-1.5 transition-colors", restockUnit === id ? "bg-background font-medium shadow-sm" : "text-muted-foreground")}
+            >
+              {label}
+            </button>
+          ))}
+        </div>
         <div className="flex items-center justify-between gap-3">
-          <MiniStepper value={boxes} onChange={setBoxes} min={1} max={12} label="Nombre de boîtes rachetées" unit={boxes > 1 ? "boîtes" : "boîte"} />
+          <MiniStepper
+            value={restockCount}
+            onChange={setRestockCount}
+            min={1}
+            max={restockUnit === "boxes" ? 12 : 36}
+            label="Quantité rachetée"
+            unit={restockUnit === "boxes" ? (restockCount > 1 ? "boîtes" : "boîte") : restockCount > 1 ? "plaq." : "plaq."}
+          />
           <Button
             variant="lux"
             onClick={async () => {
-              const ok = await data.restock(boxes)
-              if (ok) setBoxes(1)
+              const ok = await data.restock(restockCount, restockUnit)
+              if (ok) setRestockCount(1)
             }}
           >
-            <PackagePlus /> +{boxes * perBox} j
+            <PackagePlus /> +{(restockUnit === "boxes" ? restockCount * packsPerBox : restockCount) * perBox} j
           </Button>
         </div>
+
+        <div className="hairline my-4" />
+
+        <p className="mb-1 text-sm font-medium">Dans une boîte, il y a…</p>
+        <MiniStepper value={packsPerBox} onChange={(n) => void data.updateProfile({ packs_per_box: n })} min={1} max={12} label="Plaquettes par boîte" unit={packsPerBox > 1 ? "plaquettes" : "plaquette"} />
+        <p className="mt-2 text-xs text-muted-foreground">Certaines boîtes n'en contiennent qu'une, d'autres 3 ou 6. Ça sert à compter tes boîtes fermées.</p>
 
         <div className="hairline my-4" />
 
@@ -330,7 +368,7 @@ export default function PackTab({ data, profile, todayKey, pillType, pack, pillI
 
         <div className="mt-4 flex items-start gap-2 rounded-xl bg-muted/50 p-3 text-xs text-muted-foreground">
           <span>
-            Le stock baisse à chaque prise enregistrée. Une boîte de {profile.pill_name ?? "ta pilule"} contient {perBox} comprimés. Tu peux aussi corriger le total à la main dans les réglages si besoin.
+            Le stock baisse à chaque prise enregistrée. Une plaquette de {profile.pill_name ?? "ta pilule"} contient {perBox} comprimés. Tu peux aussi corriger le total à la main dans les réglages si besoin.
           </span>
         </div>
       </section>

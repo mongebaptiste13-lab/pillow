@@ -299,13 +299,15 @@ export function usePillowData(userId: string, todayKey: string, onNeedsOnboardin
   )
 
   const restock = useCallback(
-    async (boxes: number): Promise<boolean> => {
+    async (count: number, unit: "boxes" | "packs" = "boxes"): Promise<boolean> => {
       const p = profileRef.current
-      if (!p || boxes <= 0) return false
-      const perBox = findPill(p.pill_name)?.daysPerBox ?? 21
+      if (!p || count <= 0) return false
+      const perPack = findPill(p.pill_name)?.daysPerBox ?? 21
+      const packsPerBox = Math.max(1, p.packs_per_box ?? 3)
+      const packs = unit === "boxes" ? count * packsPerBox : count
       return updateProfile({
-        days_remaining: (p.days_remaining ?? 0) + boxes * perBox,
-        boxes_remaining: (p.boxes_remaining ?? 0) + boxes,
+        days_remaining: (p.days_remaining ?? 0) + packs * perPack,
+        ...(unit === "boxes" ? { boxes_remaining: (p.boxes_remaining ?? 0) + count } : {}),
       })
     },
     [updateProfile],

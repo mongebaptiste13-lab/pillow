@@ -121,7 +121,7 @@ test("getStockInfo 21/7 : boîtes de réserve, reste de la plaquette en cours et
   // Plaquette démarrée le 15/10 → le 22/10 on est au jour 8 : il reste 14 comprimés (aujourd'hui compris)
   const info = getStockInfo({ pillType: "21_7", packStartDate: "2026-10-15", perBox: 21, daysLeft: 14 + 21 + 5, todayKey: "2026-10-22", takenToday: false })
   assert.equal(info.currentPackLeft, 14)
-  assert.equal(info.reserveBoxes, 1)
+  assert.equal(info.reservePacks, 1)
   assert.equal(info.looseDays, 5)
   // 14 jours jusqu'au 4/11, pause 5→11/11, 21 jours du 12/11 au 2/12, pause 3→9/12, puis 5 jours du 10/12 → dernier comprimé le 14/12
   assert.equal(info.lastPillDate, "2026-12-14")
@@ -135,13 +135,13 @@ test("getStockInfo 21/7 : boîtes de réserve, reste de la plaquette en cours et
 test("getStockInfo : pause → plaquette en cours terminée, tout le stock est en réserve", () => {
   const info = getStockInfo({ pillType: "21_7", packStartDate: "2026-10-01", perBox: 21, daysLeft: 42, todayKey: "2026-10-23", takenToday: false })
   assert.equal(info.currentPackLeft, 0)
-  assert.equal(info.reserveBoxes, 2)
+  assert.equal(info.reservePacks, 2)
 })
 
 test("getStockInfo : prise continue, et stock vide", () => {
   const info = getStockInfo({ pillType: "28_continu", packStartDate: "2026-10-15", perBox: 28, daysLeft: 50, todayKey: "2026-10-22", takenToday: false })
   assert.equal(info.currentPackLeft, 21) // jour 8 sur 28 → 21 restants
-  assert.equal(info.reserveBoxes, 1)
+  assert.equal(info.reservePacks, 1)
   assert.equal(info.looseDays, 1)
   const empty = getStockInfo({ pillType: "28_continu", packStartDate: null, perBox: 28, daysLeft: 0, todayKey: "2026-10-22", takenToday: false })
   assert.equal(empty.empty, true)
@@ -173,4 +173,26 @@ test("addMonthsToKey gère les fins de mois et les années", () => {
   assert.equal(addMonthsToKey("2026-10-22", 12), "2027-10-22")
   assert.equal(addMonthsToKey("2026-08-31", 6), "2027-02-28")
   assert.equal(addMonthsToKey("2026-10-22", 3), "2027-01-22")
+})
+
+test("getStockInfo : boîtes de 3 plaquettes, une boîte entamée + boîtes fermées", () => {
+  // plaquette en cours : 10 restants ; 2 plaquettes d'avance dans la boîte entamée + 2 boîtes fermées (6) = 8 plaquettes
+  const info = getStockInfo({
+    pillType: "28_continu", packStartDate: "2026-10-01", perBox: 21, packsPerBox: 3,
+    daysLeft: 10 + 8 * 21, todayKey: "2026-10-12", takenToday: false,
+  })
+  assert.equal(info.currentPackLeft, 10)
+  assert.equal(info.reservePacks, 8)
+  assert.equal(info.openBoxPacks, 2)
+  assert.equal(info.closedBoxes, 2)
+})
+
+test("getStockInfo : sans réglage, une boîte = une plaquette", () => {
+  const info = getStockInfo({
+    pillType: "28_continu", packStartDate: "2026-10-01", perBox: 21,
+    daysLeft: 10 + 3 * 21, todayKey: "2026-10-12", takenToday: false,
+  })
+  assert.equal(info.reservePacks, 3)
+  assert.equal(info.openBoxPacks, 0)
+  assert.equal(info.closedBoxes, 3)
 })

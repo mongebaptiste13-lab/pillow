@@ -68,7 +68,7 @@ export default function TodayTab({
   const daysLeft = profile.days_remaining ?? 0
   const alertAt = profile.stock_alert_days ?? 7
   const perBox = pillInfo?.daysPerBox ?? 21
-  const stock = getStockInfo({ pillType, packStartDate: profile.pack_start_date, perBox, daysLeft, todayKey, takenToday: taken })
+  const stock = getStockInfo({ pillType, packStartDate: profile.pack_start_date, perBox, packsPerBox: profile.packs_per_box ?? 3, daysLeft, todayKey, takenToday: taken })
   const lowStock = getStockLevel(daysLeft, alertAt) !== "ok"
   const rx = getPrescriptionInfo(profile.prescription_end_date, todayKey)
   const showRx = rx.level === "expired" || (rx.daysLeft !== null && rx.daysLeft <= 30)
@@ -283,7 +283,7 @@ export default function TodayTab({
           </Button>
         </div>
         <p className="mt-2 text-xs text-muted-foreground">
-          {stock.currentPackLeft} dans la plaquette en cours · {stock.reserveBoxes} boîte{stock.reserveBoxes > 1 ? "s" : ""} en réserve{stock.looseDays > 0 ? ` + ${stock.looseDays} j` : ""}
+          {stock.currentPackLeft} dans la plaquette en cours · {stock.reservePacks} plaquette{stock.reservePacks > 1 ? "s" : ""} d'avance{stock.looseDays > 0 ? ` + ${stock.looseDays} j` : ""}
         </p>
         <div className="mt-3 h-2 overflow-hidden rounded-full bg-muted" role="progressbar" aria-valuenow={daysLeft} aria-valuemin={0} aria-valuemax={perBox * 2} aria-label="Stock de pilules">
           <div className={cn("h-full rounded-full transition-all duration-700", lowStock ? "bg-destructive" : "bg-gradient-to-r from-primary to-gold")} style={{ width: `${stockPct}%` }} />

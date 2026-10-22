@@ -51,7 +51,7 @@ curl -H "Authorization: Bearer $CRON_SECRET" https://ton-site/api/cron/dispatch
 ## Suivi de plaquette, stock et ordonnance
 
 - **Où j'en suis** : à l'inscription (« j'ai déjà commencé, jour 8 ») ou plus tard via *Plaquette → Corriger ma progression*. L'app affiche le jour en cours, les comprimés restants, la prochaine pause ou nouvelle plaquette.
-- **Stock** : jours restants, détail plaquette en cours / boîtes en réserve, date estimée du dernier comprimé (pauses incluses), rachat en un geste, seuil d'alerte réglable.
+- **Stock** : jours restants, détail plaquette en cours / plaquettes d'avance / boîtes fermées (nombre de plaquettes par boîte réglable), rachat en boîtes ou en plaquettes, date estimée du dernier comprimé (pauses incluses), seuil d'alerte réglable.
 - **Ordonnance** : date de fin (raccourcis 3 mois / 6 mois / 1 an), compte à rebours, bannière sur l'accueil à 30 jours, notifications par palier.
 
 ## Scripts

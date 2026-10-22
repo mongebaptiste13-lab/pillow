@@ -17,8 +17,12 @@ export interface StockInfo {
   daysLeft: number
   /** Comprimés restants dans la plaquette en cours (aujourd'hui compris s'il n'est pas pris) */
   currentPackLeft: number
-  /** Boîtes / plaquettes entières en réserve, sans la plaquette en cours */
-  reserveBoxes: number
+  /** Plaquettes entières d'avance, sans la plaquette en cours */
+  reservePacks: number
+  /** Plaquettes d'avance encore dans la boîte entamée (celle de la plaquette en cours) */
+  openBoxPacks: number
+  /** Boîtes fermées, jamais ouvertes */
+  closedBoxes: number
   /** Comprimés « libres » en plus des boîtes entières de réserve */
   looseDays: number
   /** Jour du dernier comprimé (pauses comprises), null si le stock est vide */
@@ -31,13 +35,17 @@ export interface StockInfo {
 export function getStockInfo(params: {
   pillType: PillType
   packStartDate: string | null | undefined
+  /** Comprimés par plaquette */
   perBox: number
+  /** Plaquettes par boîte (1 par défaut) */
+  packsPerBox?: number
   daysLeft: number
   todayKey: string
   takenToday: boolean
 }): StockInfo {
   const { pillType, packStartDate, todayKey, takenToday } = params
   const perBox = Math.max(1, params.perBox)
+  const packsPerBox = Math.max(1, Math.floor(params.packsPerBox ?? 1))
   const daysLeft = Math.max(0, Math.floor(params.daysLeft))
 
   /* Dans la plaquette en cours : combien de comprimés restent à prendre ? */
@@ -56,8 +64,11 @@ export function getStockInfo(params: {
 
   const currentPackLeft = Math.min(daysLeft, inPack)
   const afterPack = daysLeft - currentPackLeft
-  const reserveBoxes = Math.floor(afterPack / perBox)
+  const reservePacks = Math.floor(afterPack / perBox)
   const looseDays = afterPack % perBox
+  // La plaquette en cours vient de la boîte entamée : le reste de cette boîte, puis des boîtes fermées
+  const openBoxPacks = reservePacks % packsPerBox
+  const closedBoxes = Math.floor(reservePacks / packsPerBox)
 
   /* Date du dernier comprimé : on avance jour par jour en sautant les pauses */
   let lastPillDate: string | null = null
@@ -77,7 +88,9 @@ export function getStockInfo(params: {
   return {
     daysLeft,
     currentPackLeft,
-    reserveBoxes,
+    reservePacks,
+    openBoxPacks,
+    closedBoxes,
     looseDays,
     lastPillDate,
     calendarDaysLeft: lastPillDate ? Math.max(0, diffDays(todayKey, lastPillDate)) : null,

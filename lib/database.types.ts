@@ -13,6 +13,8 @@ export type ProfileRow = {
   pill_name: string | null
   pill_time: string | null
   boxes_remaining: number | null
+  /** Nombre de plaquettes dans une boîte (ex. 3) */
+  packs_per_box: number | null
   days_remaining: number | null
   stock_alert_days: number | null
   timezone: string
