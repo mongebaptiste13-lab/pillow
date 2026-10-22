@@ -13,7 +13,7 @@ type AppState = "loading" | "auth" | "recovery" | "onboarding" | "app"
 function SplashScreen() {
   return (
     <div className="min-h-dvh flex flex-col items-center justify-center gap-8">
-      <LogoMark size={84} className="animate-pop" />
+      <LogoMark size={84} className="drop-shadow-[0_10px_20px_rgba(67,32,58,0.25)] animate-pop" />
       <PillLoader size={44} />
     </div>
   )

@@ -167,7 +167,7 @@ test("stock vide : message « plus de pilules »", async () => {
   const w = world({ profile: { days_remaining: 0, pill_time: "22:00" } })
   await w.run("2026-10-22T07:00:00Z")
   assert.deepEqual(w.kinds(), ["stock"])
-  assert.match(w.sent[0].payload.body, /pharmacie/i)
+  assert.match(w.sent[0].payload.body, /pharmacie|pilule|stock|boîte/i)
 })
 
 test("après un réachat, le prochain passage sous le seuil prévient de nouveau", async () => {

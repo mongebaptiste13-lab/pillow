@@ -112,13 +112,13 @@ export default function Auth({
       <div className="w-full max-w-sm animate-fade-up">
         <div className="flex flex-col items-center text-center mb-8">
           <div className="relative">
-                        <LogoMark size={92}  />
+            <LogoMark size={92} className="drop-shadow-[0_10px_20px_rgba(67,32,58,0.25)]" />
           </div>
           <h1 className="font-display mt-5 text-5xl font-semibold tracking-tight">Pillow</h1>
           <p className="mt-1 text-sm text-muted-foreground">Ta pilule, sans y penser.</p>
         </div>
 
-        <div className="surface-lux rounded-2xl p-6">
+        <div className="surface-lux rounded-3xl p-6">
           {(mode === "signin" || mode === "signup") && (
             <div className="mb-5 grid grid-cols-2 gap-1 rounded-2xl bg-muted p-1" role="tablist">
               {(["signin", "signup"] as const).map((m) => (
@@ -235,7 +235,7 @@ export default function Auth({
         </div>
 
         <p className="mt-5 flex items-center justify-center gap-1.5 text-center text-xs text-muted-foreground">
-          <ShieldCheck className="size-3.5 text-muted-foreground" />
+          <ShieldCheck className="size-3.5 text-gold" />
           Tes données ne sont visibles que par toi.
         </p>
       </div>

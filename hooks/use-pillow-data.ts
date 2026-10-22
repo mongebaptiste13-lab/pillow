@@ -183,7 +183,7 @@ export function usePillowData(userId: string, todayKey: string, onNeedsOnboardin
         if (result === "ok") synced++
       }
       setPending(queue.length)
-      if (synced > 0) toast.success(`${synced} modification${synced > 1 ? "s" : ""} synchronisée${synced > 1 ? "s" : ""} ✨`)
+      if (synced > 0) toast.success(`${synced} modification${synced > 1 ? "s" : ""} synchronisée${synced > 1 ? "s" : ""}`)
     } finally {
       flushingRef.current = false
     }

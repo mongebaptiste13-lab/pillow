@@ -4,7 +4,7 @@ import { useEffect, useMemo, useState } from "react"
 import { useTheme } from "next-themes"
 import { toast } from "sonner"
 import {
-  Bell, BellRing, Check, Download, LogOut, Monitor, Moon, Pill, Play, Search, Send, Smartphone, Sun, Trash2, TriangleAlert, Upload, User, Volume2,
+  Bell, BellRing, Check, Download, LogOut, Monitor, Moon, Pill, Search, Send, Smartphone, Sun, Trash2, TriangleAlert, User,
 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -20,7 +20,6 @@ import { useInstallPrompt } from "@/hooks/use-install-prompt"
 import { authFetch } from "@/lib/supabase-client"
 import { FRENCH_PILLS } from "@/lib/pill-data"
 import { formatTime } from "@/lib/date"
-import { DEFAULT_SOUND, SOUND_PRESETS, getSoundSettings, playSound, readAudioFile, saveSoundSettings, type SoundId, type SoundSettings } from "@/lib/sound"
 import { cn } from "@/lib/utils"
 import type { PushState, TabCommon } from "@/components/dashboard/types"
 
@@ -33,7 +32,7 @@ interface ServerStatus {
 
 function Section({ title, icon: Icon, children }: { title: string; icon: typeof User; children: React.ReactNode }) {
   return (
-    <section className="surface-lux rounded-2xl p-5">
+    <section className="surface-lux rounded-3xl p-5">
       <h2 className="mb-4 flex items-center gap-2 font-display text-2xl font-semibold">
         <Icon className="size-5 text-primary" /> {title}
       </h2>
@@ -70,40 +69,8 @@ export default function SettingsTab({ data, profile, pillInfo, push, userId }: T
   const [confirmText, setConfirmText] = useState("")
   const [deleting, setDeleting] = useState(false)
   const [status, setStatus] = useState<ServerStatus | null>(null)
-  const [sound, setSound] = useState<SoundSettings>(DEFAULT_SOUND)
 
-  useEffect(() => {
-    setMounted(true)
-    setSound(getSoundSettings())
-  }, [])
-
-  function updateSound(patch: Partial<SoundSettings>) {
-    const next = { ...sound, ...patch }
-    setSound(next)
-    if (!saveSoundSettings(next)) toast.error("Impossible d'enregistrer le réglage du son sur cet appareil.")
-  }
-
-  function pickSound(id: SoundId) {
-    updateSound({ id })
-    void playSound(id, sound.custom)
-  }
-
-  async function onCustomFile(file: File | undefined) {
-    if (!file) return
-    try {
-      const custom = await readAudioFile(file)
-      const next = { ...sound, id: "custom" as const, custom, customName: file.name }
-      setSound(next)
-      if (!saveSoundSettings(next)) {
-        toast.error("Fichier trop lourd pour être gardé sur cet appareil.")
-        return
-      }
-      void playSound("custom", custom)
-      toast.success("Ton son est enregistré.")
-    } catch (e) {
-      toast.error(e instanceof Error ? e.message : "Impossible de lire ce fichier.")
-    }
-  }
+  useEffect(() => setMounted(true), [])
 
   // Quand le profil change ailleurs (autre appareil), on resynchronise les champs
   useEffect(() => {
@@ -322,84 +289,6 @@ export default function SettingsTab({ data, profile, pillInfo, push, userId }: T
             <BellRing /> Activer les rappels
           </Button>
         )}
-      </Section>
-
-      {/* ───────── Son ───────── */}
-      <Section title="Son du rappel" icon={Volume2}>
-        <ToggleRow
-          label="Jouer un son"
-          hint="Quand l'app est ouverte"
-          checked={sound.enabled}
-          onChange={(v) => updateSound({ enabled: v })}
-        />
-
-        <div className="mt-2 space-y-1.5" role="radiogroup" aria-label="Son du rappel">
-          {SOUND_PRESETS.map((p) => {
-            const active = sound.id === p.id
-            return (
-              <button
-                key={p.id}
-                type="button"
-                role="radio"
-                aria-checked={active}
-                onClick={() => pickSound(p.id)}
-                disabled={!sound.enabled}
-                className={cn(
-                  "flex w-full items-center gap-3 rounded-xl border px-3 py-2.5 text-left transition-colors disabled:opacity-50",
-                  active ? "border-primary bg-accent" : "hover:bg-muted",
-                )}
-              >
-                <span className={cn("grid size-5 shrink-0 place-items-center rounded-full border-2", active ? "border-primary bg-primary" : "border-muted-foreground/40")}>
-                  {active && <span className="size-1.5 rounded-full bg-primary-foreground" />}
-                </span>
-                <span className="min-w-0 flex-1 text-sm font-medium">{p.label}</span>
-                <Play className="size-4 shrink-0 text-muted-foreground" aria-hidden="true" />
-              </button>
-            )
-          })}
-
-          {sound.custom && (
-            <button
-              type="button"
-              role="radio"
-              aria-checked={sound.id === "custom"}
-              onClick={() => pickSound("custom")}
-              disabled={!sound.enabled}
-              className={cn(
-                "flex w-full items-center gap-3 rounded-xl border px-3 py-2.5 text-left transition-colors disabled:opacity-50",
-                sound.id === "custom" ? "border-primary bg-accent" : "hover:bg-muted",
-              )}
-            >
-              <span className={cn("grid size-5 shrink-0 place-items-center rounded-full border-2", sound.id === "custom" ? "border-primary bg-primary" : "border-muted-foreground/40")}>
-                {sound.id === "custom" && <span className="size-1.5 rounded-full bg-primary-foreground" />}
-              </span>
-              <span className="min-w-0 flex-1">
-                <span className="block text-sm font-medium">Mon son</span>
-                <span className="block truncate text-xs text-muted-foreground">{sound.customName ?? "Fichier personnel"}</span>
-              </span>
-              <Play className="size-4 shrink-0 text-muted-foreground" aria-hidden="true" />
-            </button>
-          )}
-        </div>
-
-        <label className="mt-3 flex cursor-pointer items-center justify-center gap-2 rounded-xl border border-dashed px-3 py-3 text-sm font-medium transition-colors hover:bg-muted">
-          <Upload className="size-4" />
-          {sound.custom ? "Remplacer mon son" : "Utiliser mon propre son"}
-          <input
-            type="file"
-            accept="audio/*"
-            className="sr-only"
-            data-testid="custom-sound-input"
-            onChange={(e) => {
-              void onCustomFile(e.target.files?.[0])
-              e.target.value = ""
-            }}
-          />
-        </label>
-
-        <p className="mt-3 text-xs text-muted-foreground">
-          App fermée, c'est le son de notification de ton téléphone qui sonne (réglable dans ses paramètres).
-        </p>
       </Section>
 
       {/* ───────── Apparence ───────── */}
