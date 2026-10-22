@@ -26,7 +26,7 @@ pnpm dev
 | Variable | Rôle |
 |---|---|
 | `NEXT_PUBLIC_VAPID_PUBLIC_KEY` / `VAPID_PRIVATE_KEY` | clés générées par `pnpm vapid` |
-| `VAPID_SUBJECT` | `mailto:toi@exemple.fr` |
+| `VAPID_EMAIL` | `mailto:toi@exemple.fr` |
 | `CRON_SECRET` | secret partagé qui protège `/api/cron/dispatch` |
 
 Les rappels sont envoyés par un **dispatcher serveur** (`/api/cron/dispatch`) qui doit être appelé **chaque minute**. Il envoie :
