@@ -1,126 +1,110 @@
 "use client"
 
-import { useEffect, useState, useRef } from "react"
+import { useCallback, useEffect, useRef, useState } from "react"
 import Auth from "@/components/auth"
 import Onboarding from "@/components/onboarding"
 import Dashboard from "@/components/dashboard"
-import { Loader2 } from "lucide-react"
+import { PillLoader } from "@/components/pill-loader"
+import { LogoMark } from "@/components/logo"
+import { createClient, isSupabaseConfigured } from "@/lib/supabase-client"
 
-type AppState = "loading" | "auth" | "onboarding" | "app"
+type AppState = "loading" | "auth" | "recovery" | "onboarding" | "app"
+
+function SplashScreen() {
+  return (
+    <div className="min-h-dvh flex flex-col items-center justify-center gap-8">
+      <LogoMark size={84} className="drop-shadow-[0_14px_28px_rgba(67,32,58,0.4)] animate-pop" />
+      <PillLoader size={44} />
+    </div>
+  )
+}
 
 export default function Home() {
   const [appState, setAppState] = useState<AppState>("loading")
   const [userId, setUserId] = useState<string | null>(null)
-  const supabaseRef = useRef<Awaited<ReturnType<typeof import("@/lib/supabase-client").createClient>> | null>(null)
+  const mounted = useRef(true)
 
-  async function getSupabase() {
-    if (supabaseRef.current) return supabaseRef.current
-    const { createClient } = await import("@/lib/supabase-client")
-    supabaseRef.current = createClient()
-    return supabaseRef.current
-  }
-
-  async function checkProfileAndNavigate(uid: string) {
+  const routeUser = useCallback(async (uid: string) => {
     try {
-      const sb = await getSupabase()
-      const { data: profile } = await sb
+      const { data: profile, error } = await createClient()
         .from("profiles")
         .select("name, pill_name, pill_time")
         .eq("id", uid)
         .maybeSingle()
-      const complete = !!(profile?.name && profile?.pill_name && profile?.pill_time)
+      if (!mounted.current) return
+      if (error) throw error
+      const complete = Boolean(profile?.name && profile?.pill_name && profile?.pill_time)
       setUserId(uid)
       setAppState(complete ? "app" : "onboarding")
     } catch {
+      // Réseau coupé ou profil illisible : le tableau de bord gère le hors-ligne, l'onboarding sinon
+      if (!mounted.current) return
       setUserId(uid)
-      setAppState("onboarding")
+      setAppState(typeof navigator !== "undefined" && navigator.onLine === false ? "app" : "onboarding")
     }
-  }
-
-  useEffect(() => {
-    let mounted = true
-
-    // Bail: never stay in loading > 7s
-    const bail = setTimeout(() => {
-      if (mounted) setAppState("auth")
-    }, 7000)
-
-    async function boot() {
-      // Check env vars
-      if (!process.env.NEXT_PUBLIC_SUPABASE_URL || !process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY) {
-        clearTimeout(bail)
-        if (mounted) setAppState("auth")
-        return
-      }
-
-      try {
-        const sb = await getSupabase()
-
-        // Direct session check — simpler and more reliable than onAuthStateChange for initial load
-        const { data: { session } } = await sb.auth.getSession()
-        clearTimeout(bail)
-
-        if (!mounted) return
-
-        if (!session?.user) {
-          setAppState("auth")
-          return
-        }
-
-        await checkProfileAndNavigate(session.user.id)
-
-        // Only listen for sign out after initial check
-        sb.auth.onAuthStateChange((event) => {
-          if (!mounted) return
-          if (event === "SIGNED_OUT") {
-            setAppState("auth")
-            setUserId(null)
-          }
-        })
-      } catch {
-        clearTimeout(bail)
-        if (mounted) setAppState("auth")
-      }
-    }
-
-    boot()
-
-    return () => {
-      mounted = false
-      clearTimeout(bail)
-    }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
-  // Called by Auth after successful sign in — no reload needed
-  async function handleAuth(uid: string) {
-    setAppState("loading")
-    await checkProfileAndNavigate(uid)
-  }
+  useEffect(() => {
+    mounted.current = true
 
-  if (appState === "loading") {
-    return (
-      <div className="min-h-screen flex flex-col items-center justify-center gap-4 bg-background">
-        <div className="w-20 h-20 rounded-3xl overflow-hidden shadow-lg">
-          {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img src="/pillow-logo.png" alt="Pillow" className="w-full h-full object-cover scale-[1.7]" />
-        </div>
-        <Loader2 className="h-6 w-6 animate-spin text-primary" />
-      </div>
-    )
-  }
+    if (!isSupabaseConfigured()) {
+      setAppState("auth")
+      return
+    }
 
-  if (appState === "auth") {
-    return <Auth onAuth={handleAuth} />
-  }
+    // Jamais plus de 8 s sur l'écran de chargement
+    const bail = window.setTimeout(() => {
+      if (mounted.current) setAppState((s) => (s === "loading" ? "auth" : s))
+    }, 8000)
 
-  if (appState === "onboarding" && userId) {
-    return <Onboarding userId={userId} onComplete={() => setAppState("app")} />
-  }
+    const supabase = createClient()
 
-  if (appState === "app" && userId) {
-    return <Dashboard userId={userId} onNeedsOnboarding={() => setAppState("onboarding")} />
-  }
+    // Écouteur AVANT getSession : le lien « mot de passe oublié » déclenche PASSWORD_RECOVERY au chargement
+    const { data: sub } = supabase.auth.onAuthStateChange((event) => {
+      if (!mounted.current) return
+      if (event === "PASSWORD_RECOVERY") {
+        window.clearTimeout(bail)
+        setAppState("recovery")
+      } else if (event === "SIGNED_OUT") {
+        setUserId(null)
+        setAppState("auth")
+      }
+    })
 
+    supabase.auth
+      .getSession()
+      .then(async ({ data: { session } }) => {
+        window.clearTimeout(bail)
+        if (!mounted.current) return
+        if (!session?.user) {
+          setAppState((s) => (s === "recovery" ? s : "auth"))
+          return
+        }
+        if (!window.location.hash.includes("type=recovery")) await routeUser(session.user.id)
+      })
+      .catch(() => {
+        window.clearTimeout(bail)
+        if (mounted.current) setAppState("auth")
+      })
+
+    return () => {
+      mounted.current = false
+      window.clearTimeout(bail)
+      sub.subscription.unsubscribe()
+    }
+  }, [routeUser])
+
+  const handleAuth = useCallback(
+    async (uid: string) => {
+      setAppState("loading")
+      await routeUser(uid)
+    },
+    [routeUser],
+  )
+
+  if (appState === "loading") return <SplashScreen />
+  if (appState === "recovery") return <Auth onAuth={handleAuth} initialMode="reset" />
+  if (appState === "onboarding" && userId) return <Onboarding userId={userId} onComplete={() => setAppState("app")} />
+  if (appState === "app" && userId) return <Dashboard userId={userId} onNeedsOnboarding={() => setAppState("onboarding")} />
   return <Auth onAuth={handleAuth} />
 }

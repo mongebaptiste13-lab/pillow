@@ -1,267 +1,70 @@
-# Luna - App de Suivi de Pilule et Cycle Menstruel
+# Pillow 💊
 
-Une application PWA progressive pour suivre ta pilule contraceptive et ton cycle menstruel.
+Ton rappel de pilule, élégant et fiable. Application web installable (PWA) en français :
+rappels push même app fermée, suivi des prises, plaquette 21/7, gestion du stock, historique et statistiques.
 
-## 🚀 Fonctionnalités
+**Stack :** Next.js 16 · React 19 · Tailwind 4 · Supabase (Auth, Postgres, Realtime) · Web Push (VAPID)
 
-- ✅ **Rappel quotidien de pilule** - Notifications push personnalisées
-- ✅ **Suivi du cycle** - Calendrier avec dates de prise de pilule
-- ✅ **PWA installable** - Fonctionne hors ligne
-- ✅ **Données sécurisées** - Stockage local avec Supabase optionnel
-- ✅ **Interface mobile-first** - Optimisée pour tous les appareils
-
-## 📋 Prérequis
-
-- Node.js 18+ et pnpm
-- (Optionnel) Compte Supabase pour la synchronisation cloud
-- (Optionnel) Compte Firebase pour les notifications push
-
-## ⚙️ Installation
-
-### 1. Cloner et installer les dépendances
+## Démarrage
 
 ```bash
-cd pillule
 pnpm install
-```
-
-### 2. Configuration des variables d'environnement
-
-Créer un fichier `.env.local` à la racine du projet :
-
-```bash
-cp .env.example .env.local
-```
-
-Remplir les variables :
-
-```env
-# Supabase (optionnel pour la V1)
-NEXT_PUBLIC_SUPABASE_URL=your_supabase_url
-NEXT_PUBLIC_SUPABASE_ANON_KEY=your_supabase_anon_key
-
-# Firebase Cloud Messaging (optionnel pour la V1)
-NEXT_PUBLIC_FIREBASE_API_KEY=your_firebase_api_key
-```
-
-### 3. Lancer en développement
-
-```bash
+cp .env.example .env.local      # puis remplis les valeurs (voir ci-dessous)
+pnpm vapid                      # génère les clés VAPID à copier dans .env.local
 pnpm dev
 ```
 
-L'app sera disponible sur `http://localhost:3000`
+### 1. Supabase
 
-## 🗄️ Structure du projet
+1. Crée un projet sur [supabase.com](https://supabase.com).
+2. Ouvre **SQL Editor** et exécute `supabase-setup.sql` (idempotent : tu peux le relancer sans risque).
+3. **Authentication → URL Configuration** : ajoute l'URL de ton site (et `http://localhost:3000`) dans *Site URL* / *Redirect URLs* (nécessaire pour « mot de passe oublié »).
+4. Copie dans `.env.local` : `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_ANON_KEY` et `SUPABASE_SERVICE_ROLE_KEY` (⚠️ cette dernière reste côté serveur, ne la préfixe jamais par `NEXT_PUBLIC_`).
 
-```
-├── app/
-│   ├── api/              # Routes API (pill-log, notifications, sync-data)
-│   ├── layout.tsx        # Layout principal avec PWA setup
-│   ├── page.tsx          # Page d'accueil
-│   └── globals.css       # Styles globaux
-├── components/
-│   ├── dashboard.tsx     # Composant principal (onglets)
-│   ├── onboarding.tsx    # Écran d'onboarding initial
-│   ├── service-worker-provider.tsx
-│   ├── theme-provider.tsx
-│   └── ui/               # Composants UI réutilisables
-├── lib/
-│   ├── supabase-client.ts
-│   ├── supabase-server.ts
-│   ├── use-notifications.ts
-│   ├── utils.ts
-│   └── env.ts
-├── public/
-│   ├── manifest.json     # Manifest PWA
-│   └── service-worker.ts # Service Worker
-└── styles/
-    └── globals.css       # Styles globaux
-```
+### 2. Notifications push
 
-## 📱 Fonctionnement
+| Variable | Rôle |
+|---|---|
+| `NEXT_PUBLIC_VAPID_PUBLIC_KEY` / `VAPID_PRIVATE_KEY` | clés générées par `pnpm vapid` |
+| `VAPID_SUBJECT` | `mailto:toi@exemple.fr` |
+| `CRON_SECRET` | secret partagé qui protège `/api/cron/dispatch` |
 
-### Onboarding initial
+Les rappels sont envoyés par un **dispatcher serveur** (`/api/cron/dispatch`) qui doit être appelé **chaque minute**. Il envoie :
+rappel à l'heure de prise, jusqu'à 3 relances toutes les 30 min, rappels « plus tard », alerte de stock (9 h), rappel de reprise après la pause (18 h la veille). Les envois sont dédoublonnés (aucun doublon même si le cron se chevauche) et respectent le fuseau horaire de chaque utilisatrice.
 
-À la première visite, l'utilisateur configure :
-- Son nom
-- Son type de pilule (21/7 ou 28 jours)
-- Son heure de prise quotidienne
+Deux façons de le déclencher, au choix :
 
-Les données sont sauvegardées localement dans le navigateur.
+- **Netlify** : `netlify/functions/dispatch-notifications.mjs` est déjà planifiée (`* * * * *`). Définis `CRON_SECRET` dans Netlify (l'URL du site est détectée automatiquement).
+- **Supabase pg_cron + pg_net** : exécute `supabase-cron.sql` après avoir remplacé l'URL du site et le `CRON_SECRET`.
 
-### Onglet Pilule (principal)
-
-- Affiche un gros bouton avec la question "As-tu pris ta pilule ?"
-- Les boutons deviennent actifs 30 min avant l'heure programmée
-- Avant cette heure, affiche un compte à rebours
-- Après confirmation, programme un rappel de sécurité dans 2h30
-
-### Onglet Suivi du cycle
-
-- Calendrier du mois en cours
-- Les jours où la pilule a été prise sont marqués en vert ✓
-- Légende : Règles (rose), Fertile (orange), Pilule prise (vert)
-- Section infos : durée du cycle, durée des règles, dernières règles
-
-### Onglet Mon compte
-
-- Paramètres des notifications
-- Informations du cycle
-- Bouton d'installation PWA (iOS/Android)
-
-## 🔔 Notifications
-
-### Permissions
-
-L'app demandera automatiquement la permission pour les notifications.
-
-### Types de notifications
-
-1. **Rappel quotidien** - À l'heure programmée
-2. **Rappel de sécurité** - 2h30 après confirmation
-3. **Prédiction règles** - Quelques jours avant (optionnel)
-
-### Sur iOS
-
-Les notifications web exigent que l'app soit **ajoutée à l'écran d'accueil** :
-1. Ouvrir dans Safari
-2. Cliquer le bouton de partage
-3. Sélectionner "Ajouter à l'écran d'accueil"
-
-Sur Android, l'app s'installe directement via le prompt.
-
-## 💾 Stockage des données
-
-### V1 (MVP - Stockage local)
-
-Toutes les données sont sauvegardées localement dans IndexedDB :
-- Préférences utilisateur
-- Journal de prise de pilule
-- Dates des dernières règles
-
-Les données restent privées sur l'appareil.
-
-### V2+ (Supabase optionnel)
-
-Configuration Supabase pour la synchronisation cloud :
-
-**Tables requises :**
-
-```sql
--- Profiles
-CREATE TABLE profiles (
-  id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
-  user_id UUID REFERENCES auth.users,
-  name TEXT,
-  timezone TEXT,
-  created_at TIMESTAMP DEFAULT now()
-);
-
--- Pill schedules
-CREATE TABLE pill_schedules (
-  id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
-  user_id UUID REFERENCES auth.users,
-  pill_time TIME,
-  pill_type TEXT,
-  reminder_enabled BOOLEAN DEFAULT true,
-  created_at TIMESTAMP DEFAULT now()
-);
-
--- Pill logs
-CREATE TABLE pill_logs (
-  id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
-  user_id UUID REFERENCES auth.users,
-  scheduled_for DATE,
-  taken_at TIMESTAMP,
-  status TEXT,
-  created_at TIMESTAMP DEFAULT now()
-);
-
--- Period entries
-CREATE TABLE period_entries (
-  id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
-  user_id UUID REFERENCES auth.users,
-  start_date DATE,
-  end_date DATE,
-  created_at TIMESTAMP DEFAULT now()
-);
-```
-
-Activer les RLS (Row Level Security) pour sécuriser l'accès aux données.
-
-## 🛠️ Développement
-
-### Lancer le dev server
+Test manuel :
 
 ```bash
-pnpm dev
+curl -H "Authorization: Bearer $CRON_SECRET" https://ton-site/api/cron/dispatch
 ```
 
-### Compiler pour la production
+### 3. Installer sur le téléphone
 
-```bash
-pnpm build
-```
+- **Android / desktop** : bouton « Installer » dans Réglages (ou menu du navigateur).
+- **iPhone** : les notifications push ne fonctionnent qu'une fois l'app **ajoutée à l'écran d'accueil** (Partager → *Sur l'écran d'accueil*), iOS 16.4 minimum. Active ensuite les notifications depuis Réglages.
 
-### Linter
+## Scripts
 
-```bash
-pnpm lint
-```
+| Commande | |
+|---|---|
+| `pnpm dev` / `pnpm build` / `pnpm start` | Next.js |
+| `pnpm typecheck` | TypeScript strict |
+| `pnpm test` | tests de la logique (jours/fuseaux, plaquette, séries) et du dispatcher |
+| `pnpm vapid` | génère une paire de clés VAPID |
 
-## 📂 Service Worker
+## Architecture
 
-Le service worker `public/service-worker.ts` gère :
-- **Caching** des assets statiques
-- **Offline support** - Fonctionnement hors ligne
-- **Background sync** - Synchronisation en arrière-plan
-- **Push notifications** - Réception des notifications
+- `lib/dispatch.ts` : moteur de notifications (injectable, testé avec un Supabase en mémoire)
+- `lib/pack.ts`, `lib/stats.ts`, `lib/date.ts` : cycle 21/7, séries, jours locaux par fuseau
+- `hooks/use-pillow-data.ts` : mises à jour optimistes, file d'attente hors ligne, synchro Realtime
+- `public/service-worker.js` : push avec actions « Je l'ai prise » / « Plus tard », cache hors ligne
+- `app/api/*` : abonnement push, rappel différé, test de notification, suppression de compte, cron
 
-L'app s'enregistre automatiquement au chargement.
+## Sécurité
 
-## 🔐 Sécurité
-
-- Les données sensibles (cycles) ne sont jamais envoyées sans consentement
-- Utiliser HTTPS en production
-- Valider toutes les entrées sur le serveur
-- Activer RLS sur Supabase pour les données multi-utilisateurs
-
-## 🐛 Troubleshooting
-
-### Service Worker ne s'enregistre pas
-
-1. Vérifier que HTTPS est activé (ou localhost)
-2. Vérifier que `public/service-worker.js` existe
-3. Nettoyer le cache du navigateur
-
-### Notifications ne fonctionnent pas
-
-1. Vérifier les permissions (Settings > Notifications)
-2. Sur iOS, l'app doit être sur l'écran d'accueil
-3. Sur Android, autoriser les notifications pour le navigateur
-
-### Données ne se synchronisent pas
-
-1. Vérifier la connexion internet
-2. Vérifier les variables d'environnement Supabase
-3. Consulter les logs du service worker (DevTools > Application)
-
-## 📚 Ressources
-
-- [Next.js Documentation](https://nextjs.org/docs)
-- [Progressive Web Apps](https://web.dev/progressive-web-apps/)
-- [Supabase Docs](https://supabase.com/docs)
-- [MDN Web Docs - Service Workers](https://developer.mozilla.org/en-US/docs/Web/API/Service_Worker_API)
-
-## 📄 Licence
-
-MIT
-
-## 👥 Contribution
-
-Les contributions sont les bienvenues ! N'hésitez pas à ouvrir une issue ou une PR.
-
----
-
-**💡 Note :** Cette V1 du MVP fonctionne entièrement en local. Les données Supabase/Firebase seront intégrées dans les prochaines versions.
+Row Level Security activée sur toutes les tables ; chaque utilisatrice ne voit que ses données. La clé `service_role` n'est utilisée que par les routes serveur.

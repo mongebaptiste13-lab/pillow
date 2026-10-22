@@ -98,6 +98,8 @@ export const FRENCH_PILLS: PillInfo[] = [
   // 4e gen — Nomégestrol
   { name: "Zoely",                               substance: "Estradiol 1,5 mg + Nomégestrol",   category: "combinée",         generation: "4", daysPerBox: 28, pillType: "28_continu" },
   { name: "Nomégestrol/Estradiol Viatris",       substance: "Estradiol 1,5 mg + Nomégestrol",   category: "combinée",         generation: "4", daysPerBox: 28, pillType: "28_continu", isGeneric: true },
+  { name: "Autre pilule (21 jours + 7 de pause)", substance: "Non listée",                      category: "combinée",         generation: "2", daysPerBox: 21, pillType: "21_7" },
+  { name: "Autre pilule (prise continue)",       substance: "Non listée",                        category: "combinée",         generation: "2", daysPerBox: 28, pillType: "28_continu" },
   { name: "Autre / Non listée",                  substance: "",                                  category: "combinée",         generation: "2", daysPerBox: 21, pillType: "21_7" },
 ]
 

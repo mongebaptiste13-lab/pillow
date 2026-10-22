@@ -1,24 +1,29 @@
 import type { Metadata, Viewport } from 'next'
-import { Geist } from 'next/font/google'
+import { GeistSans } from 'geist/font/sans'
+import '@fontsource/cormorant-garamond/latin-500.css'
+import '@fontsource/cormorant-garamond/latin-600.css'
+import '@fontsource/cormorant-garamond/latin-700.css'
+import '@fontsource/cormorant-garamond/latin-600-italic.css'
 import { ThemeProvider } from '@/components/theme-provider'
 import { ServiceWorkerProvider } from '@/components/service-worker-provider'
+import { Toaster } from '@/components/ui/sonner'
 import './globals.css'
-
-const geist = Geist({ subsets: ["latin"], variable: "--font-geist" })
 
 export const viewport: Viewport = {
   width: 'device-width',
   initialScale: 1,
-  maximumScale: 1,
-  userScalable: false,
-  themeColor: '#e85d8a',
   viewportFit: 'cover',
+  themeColor: [
+    { media: '(prefers-color-scheme: light)', color: '#faf6f2' },
+    { media: '(prefers-color-scheme: dark)', color: '#150e14' },
+  ],
 }
 
 export const metadata: Metadata = {
-  title: 'Pillow 💊',
-  description: 'Rappel pilule et suivi de cycle menstruel',
-  generator: 'Next.js',
+  applicationName: 'Pillow',
+  title: { default: 'Pillow — rappel de pilule', template: '%s · Pillow' },
+  description:
+    'Ne ratez plus jamais votre pilule : rappels intelligents, suivi de plaquette, de stock et d’observance.',
   manifest: '/manifest.json',
   appleWebApp: {
     capable: true,
@@ -27,28 +32,24 @@ export const metadata: Metadata = {
   },
   formatDetection: { telephone: false },
   icons: {
-    icon: '/pillow-logo.png',
-    apple: '/pillow-logo.png',
+    icon: [
+      { url: '/icons/icon.svg', type: 'image/svg+xml' },
+      { url: '/icons/favicon-32.png', sizes: '32x32', type: 'image/png' },
+      { url: '/icons/favicon-48.png', sizes: '48x48', type: 'image/png' },
+    ],
+    apple: [{ url: '/icons/apple-touch-icon.png', sizes: '180x180' }],
   },
-  other: {
-    'mobile-web-app-capable': 'yes',
-    'apple-mobile-web-app-capable': 'yes',
-    'apple-mobile-web-app-status-bar-style': 'black-translucent',
-    'apple-mobile-web-app-title': 'Pillow',
-  },
+  robots: { index: false, follow: false }, // application privée : données de santé
 }
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
-    <html lang="fr" suppressHydrationWarning className={geist.variable}>
-      <head>
-        <link rel="manifest" href="/manifest.json" />
-        <meta name="theme-color" content="#e85d8a" />
-      </head>
+    <html lang="fr" suppressHydrationWarning className={GeistSans.variable}>
       <body className="font-sans antialiased">
-        <ThemeProvider attribute="class" defaultTheme="light" enableSystem>
+        <ThemeProvider attribute="class" defaultTheme="system" enableSystem disableTransitionOnChange>
           <ServiceWorkerProvider />
           {children}
+          <Toaster position="top-center" richColors closeButton />
         </ThemeProvider>
       </body>
     </html>

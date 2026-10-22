@@ -1,27 +1,41 @@
-const ICON = "/pillow-logo.png"
+import { timeToMinutes } from "@/lib/date"
+
+/**
+ * Messages + helpers de notifications.
+ * Ce fichier est importé côté client ET côté serveur (dispatcher) :
+ * toute utilisation de window/navigator reste donc dans des fonctions gardées.
+ */
+
+export const ICON = "/icons/icon-192.png"
+export const BADGE = "/icons/badge-96.png"
 
 export const TAKEN_MESSAGES = [
   "Pilule validée. Ton ovaire vient de lever les yeux au ciel. 💊",
   "C'est noté. Une petite victoire hormonale de plus.",
-  "Bien joué, mission pilule accomplie sans drame today. ✅",
+  "Bien joué, mission pilule accomplie sans drame. ✅",
   "Pilule prise. Le chaos est repoussé pour aujourd'hui.",
   "Check ! Ton futur toi te remercie. 🎉",
 ]
 
 export const REMINDER_MESSAGES = [
-  "Petit rappel tout doux : as-tu pris ta pilule ?",
+  "Petit rappel tout doux : c'est l'heure de ta pilule.",
   "Ping pilule : ton coussin pense à toi. 🛏️",
   "Alerte chic et hormonale : c'est l'heure de la pilule.",
   "Rappel amical : la pilule n'aime pas être ghostée.",
   "C'est l'heure ! Ta pilule t'attend sagement. 💊",
 ]
 
-export const FOLLOW_UP_MESSAGES = [
-  "Mini check-in : tu l'as bien prise ou on fait semblant ? 🤔",
-  "Contrôle qualité Pillow : la pilule est bien avalée ?",
-  "Pillow enquête : prise confirmée pour de vrai ?",
-  "Je reviens juste m'assurer que tout est sous contrôle. 🎀",
-  "Rapport de mission : pilule ingérée ? Confirme ! 📋",
+export const NAG_MESSAGES = [
+  "Toujours pas de pilule enregistrée aujourd'hui. On la prend maintenant ? 💊",
+  "Je reviens à la charge, avec tendresse : ta pilule t'attend.",
+  "Plus tu la prends tôt, mieux c'est. Elle est où, cette pilule ? 🔔",
+  "Petit rappel insistant mais bienveillant : pilule du jour à valider.",
+]
+
+export const SNOOZE_REMINDER_MESSAGES = [
+  "On m'avait demandé de te relancer : c'est l'heure de ta pilule. ⏰",
+  "Je reviens comme promis. Ta pilule, maintenant ? 💊",
+  "Le délai est écoulé : pilule du jour, c'est le moment.",
 ]
 
 export const SNOOZE_MESSAGES = [
@@ -37,10 +51,19 @@ export const STOCK_MESSAGES = [
   (n: number) => `Alerte shopping utile : plus que ${n} jour${n > 1 ? "s" : ""} avant la panne de pilule. 📦`,
 ]
 
+export const STOCK_EMPTY_MESSAGES = [
+  "Ton stock de pilules est épuisé. Pense à passer à la pharmacie aujourd'hui. 🏥",
+  "Plus de pilules en stock ! Un tour à la pharmacie s'impose. 📦",
+]
+
 export const RESTART_MESSAGES = [
-  "Demain on reprend la pilule. La semaine off touche à sa fin. 🔄",
-  "Petit rappel moelleux : reprise de la pilule demain. ✨",
-  "Fin de pause imminente : pense à reprendre ta pilule demain 💪",
+  "Demain on reprend la pilule : la pause touche à sa fin. 🔄",
+  "Petit rappel moelleux : nouvelle plaquette à démarrer demain. ✨",
+  "Fin de pause imminente : prépare ta nouvelle plaquette pour demain 💪",
+]
+
+export const TEST_MESSAGES = [
+  "Ça marche ! Tu recevras tes rappels ici, même quand l'app est fermée. ✨",
 ]
 
 function pickRandom<T>(items: T[]): T {
@@ -49,83 +72,107 @@ function pickRandom<T>(items: T[]): T {
 
 export const getTakenFeedbackMessage = () => pickRandom(TAKEN_MESSAGES)
 export const getReminderNotificationMessage = () => pickRandom(REMINDER_MESSAGES)
-export const getFollowUpNotificationMessage = () => pickRandom(FOLLOW_UP_MESSAGES)
+export const getNagNotificationMessage = () => pickRandom(NAG_MESSAGES)
+export const getSnoozeReminderMessage = () => pickRandom(SNOOZE_REMINDER_MESSAGES)
 export const getSnoozeFeedbackMessage = () => pickRandom(SNOOZE_MESSAGES)
-export const getStockNotificationMessage = (n: number) => pickRandom(STOCK_MESSAGES)(n)
+export const getStockNotificationMessage = (n: number) =>
+  n <= 0 ? pickRandom(STOCK_EMPTY_MESSAGES) : pickRandom(STOCK_MESSAGES)(n)
 export const getRestartNotificationMessage = () => pickRandom(RESTART_MESSAGES)
+export const getTestNotificationMessage = () => pickRandom(TEST_MESSAGES)
 
-// Safe check: Notification API is undefined on older iOS Safari
-const hasNotification = () =>
-  typeof window !== "undefined" && "Notification" in window
+/* ------------------------------------------------------------------ */
+/* Côté navigateur                                                     */
+/* ------------------------------------------------------------------ */
 
-export function fireNotification(title: string, body: string) {
-  if (!hasNotification()) return
-  if (Notification.permission === "granted") {
-    new Notification(title, { body, icon: ICON })
-  }
+const hasNotification = () => typeof window !== "undefined" && "Notification" in window
+
+export function notificationPermission(): NotificationPermission | "unsupported" {
+  return hasNotification() ? Notification.permission : "unsupported"
 }
 
-export function scheduleNotification(delayMs: number, title: string, body: string): () => void {
-  if (typeof window === "undefined" || delayMs < 0) return () => {}
-  const id = window.setTimeout(() => fireNotification(title, body), delayMs)
-  return () => window.clearTimeout(id)
-}
-
-export async function requestPermission(): Promise<NotificationPermission> {
-  if (!hasNotification()) return "denied"
+export async function requestPermission(): Promise<NotificationPermission | "unsupported"> {
+  if (!hasNotification()) return "unsupported"
   if (Notification.permission !== "default") return Notification.permission
-  return Notification.requestPermission()
+  try {
+    return await Notification.requestPermission()
+  } catch {
+    return "denied"
+  }
 }
 
-const SCHED_KEY = "pillow:notif_scheduled_date"
-
-export function scheduleDailyNotifications({
-  pillTime, pillType, pillLogs, daysRemaining, stockAlertDays, force = false,
-}: {
-  pillTime: string
-  pillType: "21_7" | "28_continu"
-  pillLogs: string[]
-  daysRemaining: number
-  stockAlertDays: number
-  force?: boolean
-}): () => void {
-  if (!hasNotification() || Notification.permission !== "granted") return () => {}
-  const today = new Date().toISOString().split("T")[0]
-  if (!force && window.localStorage.getItem(SCHED_KEY) === today) return () => {}
-  window.localStorage.setItem(SCHED_KEY, today)
-
-  const cleanups: Array<() => void> = []
-  const now = new Date()
-  const [h, m] = pillTime.split(":").map(Number)
-
-  if (isFinite(h) && isFinite(m)) {
-    const pillAt = new Date(now.getFullYear(), now.getMonth(), now.getDate(), h, m)
-    const msUntilPill = pillAt.getTime() - now.getTime()
-    if (msUntilPill > 0) cleanups.push(scheduleNotification(msUntilPill, "Pillow 💊", getReminderNotificationMessage()))
-    const msCheck = msUntilPill + 60 * 60_000
-    if (msCheck > 0) cleanups.push(scheduleNotification(msCheck, "Pillow 💊", getFollowUpNotificationMessage()))
-  }
-
-  if (daysRemaining <= stockAlertDays && daysRemaining > 0) {
-    const nineAm = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 9, 0)
-    const msUntil9 = nineAm.getTime() - now.getTime()
-    if (msUntil9 > 0) cleanups.push(scheduleNotification(msUntil9, "Pillow 🛒", getStockNotificationMessage(daysRemaining)))
-  }
-
-  if (pillType === "21_7") {
-    const sorted = [...pillLogs].sort().reverse()
-    const lastPillDate = sorted.find((d) => d <= today)
-    if (lastPillDate) {
-      const daysSinceLast = Math.round(
-        (new Date(today + "T12:00:00").getTime() - new Date(lastPillDate + "T12:00:00").getTime()) / 86_400_000
-      )
-      if (daysSinceLast === 6) {
-        const sixPm = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 18, 0)
-        const msUntil6 = sixPm.getTime() - now.getTime()
-        if (msUntil6 > 0) cleanups.push(scheduleNotification(msUntil6, "Pillow 💊", getRestartNotificationMessage()))
+/**
+ * Affiche une notification locale. On passe par le service worker
+ * (obligatoire sur Android Chrome où `new Notification()` est interdit).
+ */
+export async function showLocalNotification(title: string, body: string, tag = "pillow-local"): Promise<boolean> {
+  if (!hasNotification() || Notification.permission !== "granted") return false
+  try {
+    if ("serviceWorker" in navigator) {
+      const reg = await navigator.serviceWorker.getRegistration()
+      if (reg) {
+        await reg.showNotification(title, {
+          body,
+          icon: ICON,
+          badge: BADGE,
+          tag,
+          data: { url: "/", kind: "local" },
+        })
+        return true
       }
     }
+    new Notification(title, { body, icon: ICON, tag })
+    return true
+  } catch {
+    return false
+  }
+}
+
+/**
+ * Filet de sécurité : si les notifications push ne sont pas activées mais que
+ * l'app est ouverte, on programme les rappels du jour en local.
+ * Les rappels s'arrêtent d'eux-mêmes dès que la pilule est enregistrée.
+ */
+export function startLocalReminders({
+  pillTime,
+  isActiveDay,
+  isTaken,
+  nagEnabled,
+}: {
+  pillTime: string
+  isActiveDay: boolean
+  isTaken: () => boolean
+  nagEnabled: boolean
+}): () => void {
+  if (typeof window === "undefined" || !hasNotification() || Notification.permission !== "granted") return () => {}
+  if (!isActiveDay) return () => {}
+
+  const target = timeToMinutes(pillTime)
+  if (target === null) return () => {}
+
+  const now = new Date()
+  const nowMs = now.getHours() * 3_600_000 + now.getMinutes() * 60_000 + now.getSeconds() * 1000
+  const timers: number[] = []
+
+  const offsets: Array<{ offset: number; message: () => string }> = [
+    { offset: 0, message: getReminderNotificationMessage },
+    ...(nagEnabled
+      ? [
+          { offset: 30, message: getNagNotificationMessage },
+          { offset: 60, message: getNagNotificationMessage },
+          { offset: 90, message: getNagNotificationMessage },
+        ]
+      : []),
+  ]
+
+  for (const { offset, message } of offsets) {
+    const delay = (target + offset) * 60_000 - nowMs
+    if (delay <= 0) continue
+    timers.push(
+      window.setTimeout(() => {
+        if (!isTaken()) void showLocalNotification("Pillow 💊", message(), "pillow-reminder")
+      }, delay),
+    )
   }
 
-  return () => cleanups.forEach((fn) => fn())
+  return () => timers.forEach((id) => window.clearTimeout(id))
 }
