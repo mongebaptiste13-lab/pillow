@@ -63,6 +63,7 @@ export const NAG_MESSAGES = [
   "Plus tôt tu la prends, plus vite je te laisse tranquille.",
   "Coucou, c'est encore moi. La pilule, tu sais.",
   "Petite voix dans ton téléphone : et si on la prenait, cette pilule ?",
+  "WHY DON'T YOU LOVE MEEEEEE ! (ta pilule, toujours dans sa boîte)",
 ]
 
 export const SNOOZE_REMINDER_MESSAGES = [
